@@ -46,6 +46,9 @@ def khatri_rao(*factors, skip=None):
     for i in range(1, num_factors):
         product = khatri_rao_binary(product, factors[i])
     return product
+
+def matrix_khatri_rao_product(X, factors, mode):
+    return unfold(X, mode) @ khatri_rao(*tuple(factors), skip=mode)
         
 def unfold(A, n):
     """Unfold tensor to matricizied form.
@@ -92,6 +95,27 @@ def fold(M, n, shape):
     newshape.insert(0, mode_dim)
 
     return np.moveaxis(np.reshape(M, newshape), 0, n)
+
+
+def unflatten_factors(A, rank, sizes):
+    n_modes = len(sizes)
+    offset = 0
+    
+    factors = []
+    for i, s in enumerate(sizes):
+        stop = offset + (s*rank)
+        matrix = A[offset:stop].reshape(s, rank)
+        factors.append(matrix)
+        offset = stop
+    return factors
+
+def flatten_factors(factors):
+    sizes = [np.prod(factor.shape) for factor in factors]
+    offsets = np.cumsum([0] + sizes)[:-1]
+    flattened = np.empty(np.sum(sizes))
+    for offset, size, factor in zip(offsets, sizes, factors):
+        flattened[offset:offset+size] = factor.ravel()
+    return flattened
 
 
 def ktensor(*factors, weights=None):
