@@ -10,7 +10,7 @@ def normalize_factor(factor):
     Parameters:
     -----------
     factor: np.ndarray
-        Factor matrix to normalize
+        Factor matrix to normalize.
 
     Returns:
     --------
@@ -23,6 +23,22 @@ def normalize_factor(factor):
     return factor/norms, norms
 
 def normalize_factors(factors):
+    """Normalizes the columns of each element in list of factors
+    
+    Parameters:
+    -----------
+    factor: list of np.ndarray
+        List containing factor matrices to normalize.
+
+    Returns:
+    --------
+    list of np.ndarray:
+        List containing matrices where the columns are normalized 
+        to length one.
+    list of np.ndarray:
+        List containing the norms of the columns from before 
+        normalization.
+    """
     normalized_factors = []
     norms = []
 
@@ -34,6 +50,11 @@ def normalize_factors(factors):
     return normalized_factors, norms
 
 def prepare_for_comparison(factors):
+    """Normalize factors and flip the signs.
+
+    This normalization makes it easier to compare the results.
+    TODO: more details.
+    """
     normalized_factors, norms = normalize_factors(factors)
     signs = []
     for i, factor in enumerate(normalized_factors):
@@ -182,7 +203,7 @@ def cp_opt(X, rank, max_its=1000, gtol=1e-10, init='random'):
 
     factors = base.unflatten_factors(result.x, rank, sizes)
 
-    return factors, result
+    return factors, result, initial_factors
 
 if __name__ == "__main__":
     X = loadmat('datasets/aminoacids.mat')['X'][0][0]['data']
