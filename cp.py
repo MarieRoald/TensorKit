@@ -75,7 +75,7 @@ def _initialize_factors_svd(X, rank):
     factors =[]
     for i in range(n_modes):
         u, s, vh = np.linalg.svd(base.unfold(X,i))
-        factors.append(u[:rank].T)
+        factors.append(u[:,:rank])
     return factors
     
 def initialize_factors(X, rank, method='random'):
