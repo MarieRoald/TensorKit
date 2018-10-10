@@ -166,10 +166,27 @@ def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init='random', verbose=T
     return factors, weights.prod(axis=0)
 
 def cp_loss(factors, tensor):
+    """Loss function for a CP (CANDECOMP/PARAFAC) model.
+
+    Loss(X) = ||X - [[F_0, F_1, ..., F_k]]||^2
+
+    Parameters:
+    -----------
+    factor: list of np.ndarray
+        List containing factor matrices for a CP model.
+    tensor: np.ndarray
+        Tensor we are attempting to model with CP.
+
+    Returns:
+    --------
+    float:
+        Loss value
+    """
     reconstructed_tensor = base.ktensor(*factors)
     return 0.5*np.linalg.norm(tensor-reconstructed_tensor)**2
 
 def cp_grad(factors, X):
+    """Gradients for CP loss."""
     grad_A = []
     for mode in range(len(factors)):
         grad_A.append(- base.matrix_khatri_rao_product(X, factors, mode)
