@@ -4,14 +4,21 @@ import base
 
 np.random.seed(0)
 
+"""
+TODO: (tests)
+- Test that the functions do not change the input
+- 
+"""
+
 #---------------- Fixtures ----------------#
 @fixture
 def random_tensor():
     return np.random.random((2, 2, 2))
+
 @fixture
 def random_matrix():
     return np.random.random((2, 2))
-
+    
 @fixture
 def random_factors():
     rank = 2
@@ -34,3 +41,9 @@ def test_flatten_inverted_by_unflatten(random_factors):
     
     for random_factor, flattened_factor in zip(random_factors, unflattened_factors):
         assert np.array_equal(random_factor, flattened_factor)
+
+def test_khatri_rao_associative(random_factors):
+    A, B, C = random_factors
+    prod1 = base.khatri_rao_binary(base.khatri_rao_binary(A, B), C)
+    prod2 = base.khatri_rao_binary(A, base.khatri_rao_binary(B, C))
+    assert np.allclose(prod1,prod2, rtol=1.e-10)
