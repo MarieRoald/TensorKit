@@ -222,6 +222,10 @@ def cp_opt(X, rank, max_its=1000, gtol=1e-10, init='random'):
 
     return factors, result, initial_factors
 
+def cp_wopt(X, W, rank, max_its=1000, gtol=1e-10, init='random'):
+    Y = W*X
+    pass
+
 if __name__ == "__main__":
     X = loadmat('datasets/aminoacids.mat')['X'][0][0]['data']
     X = X/np.linalg.norm(X)
