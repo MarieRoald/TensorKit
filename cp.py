@@ -185,6 +185,19 @@ def cp_loss(factors, tensor):
     reconstructed_tensor = base.ktensor(*factors)
     return 0.5*np.linalg.norm(tensor-reconstructed_tensor)**2
 
+def cp_weighted_loss(factors, tensor, W):
+    weighted_tensor = W*tensor
+
+    reconstructed_tensor = base.ktensor(*factors)
+    weighted_reconstructed_tensor = W*reconstructed_tensor
+
+    return 0.5*np.linalg.norm(weighted_tensor-weighted_reconstructed_tensor)**2
+
+def _cp_weighted_loss_scipy(A, *args):
+    rank, sizes, X, W = args
+    factors = base.unflatten_factors(A, rank, sizes)
+    return cp_weighted_loss(factors, X, W)
+
 def cp_grad(factors, X):
     """Gradients for CP loss."""
     grad_A = []
@@ -194,11 +207,27 @@ def cp_grad(factors, X):
     return grad_A
 
 def _cp_loss_scipy(A, *args):
+    """The CP loss for scipy.optimize.minimize
+
+    from scipy documentation:
+    scipy.optimize.minimize takes an objective function fun(x, *args)
+    where x is an 1-D array with shape (n,) and args is a tuple of the 
+    fixed parameters needed to completely specify the function.
+
+    Parameters:
+    -----------
+    A: np.ndarray 
+        1D array of shape (n,) containing the parameters to minimize over.
+    *args: tuple
+        The fixed parameters needed to completely specify the function.
+    """
     rank, sizes, X = args
     factors = base.unflatten_factors(A, rank, sizes)
     return cp_loss(factors, X)
 
 def _cp_grad_scipy(A, *args):
+    """
+    """
     rank, sizes, X = args
     n_modes = len(sizes)
 
