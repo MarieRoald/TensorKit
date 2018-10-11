@@ -193,6 +193,26 @@ def cp_weighted_loss(factors, tensor, W):
 
     return 0.5*np.linalg.norm(weighted_tensor-weighted_reconstructed_tensor)**2
 
+def cp_weighted_grad(factors, X, W):
+    Y = W*X
+
+    reconstructed_tensor = base.ktensor(*factors)
+    Z = W*reconstructed_tensor
+
+    grads = []
+    for mode in range(len(factors)):
+        grads.append(2*(base.unfold(Z, n=mode) - base.unfold(Y, n=mode)) 
+                      @ base.khatri_rao(*tuple(factors), skip=mode))
+    return grads
+
+def _cp_weighted_grad_scipy(A, *args):    
+    rank, sizes, X, W = args
+    n_modes = len(sizes)
+
+    factors = base.unflatten_factors(A, rank, sizes)
+    grad = cp_weighted_grad(factors, X, W)
+    return base.flatten_factors(grad)
+
 def _cp_weighted_loss_scipy(A, *args):
     rank, sizes, X, W = args
     factors = base.unflatten_factors(A, rank, sizes)
@@ -227,6 +247,7 @@ def _cp_loss_scipy(A, *args):
 
 def _cp_grad_scipy(A, *args):
     """
+
     """
     rank, sizes, X = args
     n_modes = len(sizes)
@@ -252,8 +273,20 @@ def cp_opt(X, rank, max_its=1000, gtol=1e-10, init='random'):
     return factors, result, initial_factors
 
 def cp_wopt(X, W, rank, max_its=1000, gtol=1e-10, init='random'):
-    Y = W*X
-    pass
+    sizes = X.shape
+    options = {'maxiter': max_its, 'gtol': gtol}
+
+    args = (rank, sizes, X, W)
+
+    initial_factors, _ = initialize_factors(X, rank, method=init)
+    initial_factors_flattened = base.flatten_factors(initial_factors)
+
+    result = optimize.minimize(fun=_cp_weighted_loss_scipy, method='cg', x0=initial_factors_flattened, 
+                               jac=_cp_weighted_grad_scipy, args=args, options=options)
+
+    factors = base.unflatten_factors(result.x, rank, sizes)
+
+    return factors, result, initial_factors
 
 if __name__ == "__main__":
     X = loadmat('datasets/aminoacids.mat')['X'][0][0]['data']

@@ -35,8 +35,8 @@ def khatri_rao(*factors, skip=None):
         matrix in `factors`. And M is the number of columns in all
         matrices in `factors`. 
     """
-    
-    factors = list(factors)
+
+    factors = list(factors).copy()
     if skip is not None:
         factors.pop(skip)
     
