@@ -28,6 +28,10 @@ def random_factors():
         factors.append(np.random.random((size, rank)))
 
     return factors
+
+@fixture
+def random_flattened_factors(random_factors):
+    return base.flatten_factors(random_factors)
     
 #----------------- Tests ------------------#
 def test_unfold_inverted_by_fold(random_tensor):
