@@ -269,7 +269,6 @@ def cp_opt(X, rank, max_its=1000, gtol=1e-10, init='random'):
                                jac=_cp_grad_scipy, args=args, options=options)
 
     factors = base.unflatten_factors(result.x, rank, sizes)
-
     return factors, result, initial_factors
 
 def cp_wopt(X, W, rank, max_its=1000, gtol=1e-10, init='random'):
