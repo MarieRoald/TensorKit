@@ -201,7 +201,7 @@ def cp_weighted_grad(factors, X, W):
 
     grads = []
     for mode in range(len(factors)):
-        grads.append(2*(base.unfold(Z, n=mode) - base.unfold(Y, n=mode)) 
+        grads.append((base.unfold(Z, n=mode) - base.unfold(Y, n=mode)) 
                       @ base.khatri_rao(*tuple(factors), skip=mode))
     return grads
 
