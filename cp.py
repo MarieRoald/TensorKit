@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import base
 from scipy import optimize
 
+from log import Logger
+
 def normalize_factor(factor):
     """Normalizes the columns of a factor matrix. 
     
@@ -262,14 +264,16 @@ def cp_opt(X, rank, max_its=1000, gtol=1e-10, init='random'):
 
     args = (rank, sizes, X)
 
+    logger = Logger(rank=rank, sizes=sizes, X=X)
+
     initial_factors, _ = initialize_factors(X, rank, method=init)
     initial_factors_flattened = base.flatten_factors(initial_factors)
 
     result = optimize.minimize(fun=_cp_loss_scipy, method='cg', x0=initial_factors_flattened, 
-                               jac=_cp_grad_scipy, args=args, options=options)
+                               jac=_cp_grad_scipy, args=args, options=options, callback=logger.log)
 
     factors = base.unflatten_factors(result.x, rank, sizes)
-    return factors, result, initial_factors
+    return factors, result, initial_factors, logger
 
 def cp_wopt(X, W, rank, max_its=1000, gtol=1e-10, init='random'):
     sizes = X.shape
