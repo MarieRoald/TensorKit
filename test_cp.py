@@ -8,7 +8,8 @@ from scipy import optimize
 
 """
 TODO: (tests)
-- 
+- Test normalize_factor and normalize_factors
+- Test initialization
 """
 
 
