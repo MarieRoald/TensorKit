@@ -6,6 +6,12 @@ from scipy import optimize
 
 from log import Logger
 
+def create_random_factors(sizes, rank):
+    factors = [np.random.randn(size, rank) for size in sizes]
+    factors, norms = normalize_factors(factors)
+    return factors, norms
+
+
 def normalize_factor(factor):
     """Normalizes the columns of a factor matrix. 
     
