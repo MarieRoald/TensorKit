@@ -3,14 +3,80 @@ from scipy.io import loadmat
 import matplotlib.pyplot as plt
 import base
 from scipy import optimize
+import itertools
 
 from log import Logger
+
+def weight_score(weight1, weight2):
+    return np.abs(weight1-weight2)/max(weight1, weight2)
+
+def factor_match_score(true_factors, estimated_factors, true_weights=None, estimated_weights=None):
+    rank = true_factors[0].shape[1]
+    
+    if true_weights is None:
+        true_weights = np.ones((rank,))
+    if estimated_weights is None:
+        estimated_weights = np.ones((rank,))
+    
+    avg_score = 0
+    for r in range(rank):
+        score = (1-weight_score(true_weights[r], estimated_weights[r]))
+        
+        for true_factor, estimated_factor in zip(true_factors, estimated_factors):
+            score *= np.abs(true_factor[:,r].T@estimated_factor[:,r])
+        
+        avg_score += score
+    avg_score /= rank
+    return avg_score
+
+def permute_factors(permutation, factors):
+    return [factor[:, permutation] for factor in factors]
+
+def permute_factors_and_weights(permutation, factors, weights):
+    permuted_factors = [factor[:, permutation] for factor in factors]
+    permuted_weights = weights[list(permutation)]
+    return permuted_factors, permuted_weights
+
+def compute_factor_match_score(true_factors, estimated_factors, true_weights=None, estimated_weights=None):
+    rank = true_factors[0].shape[1]
+
+    if true_weights is None:
+        true_weights = np.ones((rank,))
+    if estimated_weights is None:
+        estimated_weights = np.ones((rank,))
+        
+    max_fms = -1
+    best_permutation = None
+    
+    for permutation in itertools.permutations(range(rank),r=rank):
+        permuted_factors, permuted_weights = permute_factors_and_weights(permutation, estimated_factors, estimated_weights)
+        
+        fms = factor_match_score(true_factors, permuted_factors, true_weights, permuted_weights)
+
+        if fms > max_fms:
+            max_fms = fms
+            best_permutation = permutation
+            
+    return max_fms, best_permutation
 
 def create_random_factors(sizes, rank):
     factors = [np.random.randn(size, rank) for size in sizes]
     factors, norms = normalize_factors(factors)
     return factors, norms
 
+def create_data(sizes, rank, noise_factor=0):
+    factors, norms = create_random_factors(sizes=sizes, rank=rank)
+    tensor = base.ktensor(*tuple(factors))
+
+    noise = np.random.randn(*sizes)
+    noise /= np.linalg.norm(noise)
+    noise *= np.linalg.norm(tensor)
+
+    tensor += noise_factor*noise
+    return tensor, factors, norms, noise
+
+def tensor_completion_score(X, X_hat, W):
+    return np.linalg.norm((1-W)*(X - X_hat))/np.linalg.norm((1-W)*X)
 
 def normalize_factor(factor):
     """Normalizes the columns of a factor matrix. 
