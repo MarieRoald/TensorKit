@@ -8,11 +8,6 @@ class Logger:
         self.loss_values = []
         self.gradients = []
         self.gradient_values = []   
-        """
-        self.rank = rank
-        self.sizes = sizes
-        self.X = X
-        """
         self.args = args
 
         self.loss = loss
