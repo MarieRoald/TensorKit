@@ -4,21 +4,27 @@ import cp
 
 class Logger:
 
-    def __init__(self, rank, sizes, X):
+    def __init__(self, args, loss, grad):
         self.loss_values = []
         self.gradients = []
-        self.gradient_values = []        
+        self.gradient_values = []   
+        """
         self.rank = rank
         self.sizes = sizes
         self.X = X
+        """
+        self.args = args
+
+        self.loss = loss
+        self.grad = grad
 
 
     def log(self, parameters):
 
-        loss = cp._cp_loss_scipy(parameters, self.rank, self.sizes, self.X)
+        loss = self.loss(parameters, *self.args)
 
-        grad = cp._cp_grad_scipy(parameters, self.rank, self.sizes, self.X)
-        gradients = base.unflatten_factors(grad, self.rank, self.sizes)
+        grad = self.grad(parameters, *self.args)
+        gradients = base.unflatten_factors(grad, *self.args[:2])
 
         self.loss_values.append(loss)
         self.gradients.append(gradients)
