@@ -10,9 +10,10 @@ from log import Logger
 
 """
 TODO:
-- nonnegative alternative to svd init
-- random init within bounds
-- function to generate random mask that takes amount of missing data as input
+- Nonnegative alternative to svd init
+- Random init within bounds
+- Function to generate random mask that takes amount of missing data as input
+- Maybe svdinit of cp_wopt should imputate missing values with mean?
 - 
 """
 
