@@ -7,27 +7,43 @@ import itertools
 
 from log import Logger
 
+
+"""
+TODO:
+- nonnegative alternative to svd init
+- random init within bounds
+- function to generate random mask that takes amount of missing data as input
+- 
+"""
+
 def weight_score(weight1, weight2):
+    print(weight1, weight2)
     return np.abs(weight1-weight2)/max(weight1, weight2)
 
-def factor_match_score(true_factors, estimated_factors, true_weights=None, estimated_weights=None):
+def _factor_match_score(true_factors, estimated_factors, weight_penalty=True):
     rank = true_factors[0].shape[1]
-    
-    if true_weights is None:
+
+    # Make sure columns of factor matrices are normalized
+    true_factors, true_norms = normalize_factors(true_factors)
+    estimated_factors, estimated_norms = normalize_factors(estimated_factors)  
+
+    if weight_penalty:
+        true_weights = np.prod(np.concatenate(true_norms), axis=0)
+        estimated_weights = np.prod(np.concatenate(estimated_norms), axis=0)
+    else:
         true_weights = np.ones((rank,))
-    if estimated_weights is None:
         estimated_weights = np.ones((rank,))
-    
-    avg_score = 0
+
+    scores = []
     for r in range(rank):
         score = (1-weight_score(true_weights[r], estimated_weights[r]))
         
         for true_factor, estimated_factor in zip(true_factors, estimated_factors):
             score *= np.abs(true_factor[:,r].T@estimated_factor[:,r])
         
-        avg_score += score
-    avg_score /= rank
-    return avg_score
+        scores.append(score)
+    
+    return scores
 
 def permute_factors(permutation, factors):
     return [factor[:, permutation] for factor in factors]
@@ -37,21 +53,17 @@ def permute_factors_and_weights(permutation, factors, weights):
     permuted_weights = weights[list(permutation)]
     return permuted_factors, permuted_weights
 
-def compute_factor_match_score(true_factors, estimated_factors, true_weights=None, estimated_weights=None):
+def factor_match_score(true_factors, estimated_factors, weight_penalty=True):
     rank = true_factors[0].shape[1]
 
-    if true_weights is None:
-        true_weights = np.ones((rank,))
-    if estimated_weights is None:
-        estimated_weights = np.ones((rank,))
-        
     max_fms = -1
     best_permutation = None
     
     for permutation in itertools.permutations(range(rank),r=rank):
-        permuted_factors, permuted_weights = permute_factors_and_weights(permutation, estimated_factors, estimated_weights)
+        permuted_factors = permute_factors(permutation, estimated_factors)
         
-        fms = factor_match_score(true_factors, permuted_factors, true_weights, permuted_weights)
+        fms = min(_factor_match_score(true_factors, permuted_factors, weight_penalty=weight_penalty))
+        print(f"score for permutation {permutation}: {fms}")
 
         if fms > max_fms:
             max_fms = fms
@@ -74,6 +86,23 @@ def create_data(sizes, rank, noise_factor=0):
 
     tensor += noise_factor*noise
     return tensor, factors, norms, noise
+
+def create_random_uniform_factors(sizes, rank, ):
+    factors = [np.random.uniform(size=(size, rank)) for size in sizes]
+    factors, norms = normalize_factors(factors)
+    return factors, norms
+
+def create_non_negative_data(sizes, rank, noise_factor=0):
+    factors, norms = create_random_uniform_factors(sizes=sizes, rank=rank)
+    tensor = base.ktensor(*tuple(factors))
+
+    noise = np.random.randn(*sizes)
+    noise /= np.linalg.norm(noise)
+    noise *= np.linalg.norm(tensor)
+
+    tensor += noise_factor*noise
+    return tensor, factors, norms, noise
+
 
 def tensor_completion_score(X, X_hat, W):
     return np.linalg.norm((1-W)*(X - X_hat))/np.linalg.norm((1-W)*X)
@@ -330,9 +359,10 @@ def _cp_grad_scipy(A, *args):
     grad = cp_grad(factors, X)
     return base.flatten_factors(grad)
 
-def cp_opt(X, rank, method='cg', max_its=1000, gtol=1e-10, init='random'):
+def cp_opt(X, rank, method='cg', max_its=1000, bounds=None, gtol=1e-10, init='random'):
     sizes = X.shape
     options = {'maxiter': max_its, 'gtol': gtol}
+
 
     args = (rank, sizes, X)
 
@@ -342,7 +372,7 @@ def cp_opt(X, rank, method='cg', max_its=1000, gtol=1e-10, init='random'):
     initial_factors_flattened = base.flatten_factors(initial_factors)
 
     result = optimize.minimize(fun=_cp_loss_scipy, method=method, x0=initial_factors_flattened, 
-                               jac=_cp_grad_scipy, args=args, options=options, callback=logger.log)
+                               jac=_cp_grad_scipy, bounds=bounds, args=args, options=options, callback=logger.log)
 
     factors = base.unflatten_factors(result.x, rank, sizes)
     return factors, result, initial_factors, logger
