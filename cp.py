@@ -18,7 +18,6 @@ TODO:
 """
 
 def weight_score(weight1, weight2):
-    print(weight1, weight2)
     return np.abs(weight1-weight2)/max(weight1, weight2)
 
 def _factor_match_score(true_factors, estimated_factors, weight_penalty=True):
@@ -64,7 +63,6 @@ def factor_match_score(true_factors, estimated_factors, weight_penalty=True):
         permuted_factors = permute_factors(permutation, estimated_factors)
         
         fms = min(_factor_match_score(true_factors, permuted_factors, weight_penalty=weight_penalty))
-        print(f"score for permutation {permutation}: {fms}")
 
         if fms > max_fms:
             max_fms = fms
