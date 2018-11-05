@@ -267,6 +267,7 @@ def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init='random', verbose=T
         
     return factors, weights.prod(axis=0)
 
+
 def cp_loss(factors, tensor):
     """Loss function for a CP (CANDECOMP/PARAFAC) model.
 
@@ -347,6 +348,8 @@ def _cp_loss_scipy(A, *args):
     factors = base.unflatten_factors(A, rank, sizes)
     return cp_loss(factors, X)
 
+
+
 def _cp_grad_scipy(A, *args):
     """
 
@@ -358,7 +361,7 @@ def _cp_grad_scipy(A, *args):
     grad = cp_grad(factors, X)
     return base.flatten_factors(grad)
 
-def cp_opt(X, rank, method='cg', max_its=1000, bounds=None, gtol=1e-10, init='random'):
+def cp_opt(X, rank, method='cg', max_its=1000, lower_bounds=None, upper_bounds=None, gtol=1e-10, init='random'):
     sizes = X.shape
     options = {'maxiter': max_its, 'gtol': gtol}
 
@@ -370,11 +373,58 @@ def cp_opt(X, rank, method='cg', max_its=1000, bounds=None, gtol=1e-10, init='ra
     initial_factors, _ = initialize_factors(X, rank, method=init)
     initial_factors_flattened = base.flatten_factors(initial_factors)
 
+    bounds = create_bounds(lower_bounds, upper_bounds, sizes, rank)
+
     result = optimize.minimize(fun=_cp_loss_scipy, method=method, x0=initial_factors_flattened, 
                                jac=_cp_grad_scipy, bounds=bounds, args=args, options=options, callback=logger.log)
 
     factors = base.unflatten_factors(result.x, rank, sizes)
     return factors, result, initial_factors, logger
+
+def create_bounds(lower_bounds, upper_bounds, sizes, rank):
+
+    if (lower_bounds is None) and (upper_bounds is None):
+        return None
+
+    if lower_bounds is None:
+        lower_bounds = -np.inf
+    if upper_bounds is None:
+        upper_bounds = np.inf
+
+    lower_bounds = _create_bounds(lower_bounds, sizes, rank)
+    upper_bounds = _create_bounds(upper_bounds, sizes, rank)
+
+    return _bounds_scipy(lower_bounds, upper_bounds)
+
+
+def _create_bounds(bounds, sizes, rank):
+
+    if _isiterable(bounds) == False:
+        if bounds is None:
+            bounds = np.inf
+        bounds = [bounds]*len(sizes)
+    # TODO: assert bounds length = sizes length?
+    full_bounds = []
+
+    for size, bound in zip(sizes, bounds):
+        full_bounds.append(np.full((size, rank), fill_value=bound))
+
+    return full_bounds
+
+def _bounds_scipy(lower_bounds, upper_bounds):
+    upper = base.flatten_factors(upper_bounds)
+    lower = base.flatten_factors(lower_bounds)
+
+    #return list(zip(upper,lower)) 
+    return optimize.Bounds(lb=lower, ub=upper)
+def _isiterable(var):
+    try:
+        iter(var)
+    except TypeError:
+        return False
+    else:
+        return True
+
 
 def cp_wopt(X, W, rank, method='cg', max_its=1000, gtol=1e-10, init='random'):
     sizes = X.shape
