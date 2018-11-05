@@ -415,7 +415,7 @@ def _bounds_scipy(lower_bounds, upper_bounds):
     upper = base.flatten_factors(upper_bounds)
     lower = base.flatten_factors(lower_bounds)
 
-    #return list(zip(upper,lower)) 
+    #return list(zip(lower,upper)) 
     return optimize.Bounds(lb=lower, ub=upper)
 def _isiterable(var):
     try:
