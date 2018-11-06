@@ -37,7 +37,6 @@ def _factor_match_score(true_factors, estimated_factors, weight_penalty=True):
     scores = []
     for r in range(rank):
         score = (1-weight_score(true_weights[r], estimated_weights[r]))
-        
         for true_factor, estimated_factor in zip(true_factors, estimated_factors):
             score *= np.abs(true_factor[:,r].T@estimated_factor[:,r])
         
@@ -111,7 +110,7 @@ def create_non_negative_data(sizes, rank, noise_factor=0):
 
 
 def tensor_completion_score(X, X_hat, W):
-    return np.linalg.norm((1-W)*(X - X_hat))/np.linalg.norm((1-W)*X)
+    return np.linalg.norm(W*(X - X_hat))/np.linalg.norm(W*X)
 
 def normalize_factor(factor, eps=1e-15):
     """Normalizes the columns of a factor matrix. 
