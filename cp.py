@@ -110,7 +110,7 @@ def create_non_negative_data(sizes, rank, noise_factor=0):
 
 
 def tensor_completion_score(X, X_hat, W):
-    return np.linalg.norm(W*(X - X_hat))/np.linalg.norm(W*X)
+    return np.linalg.norm((1-W)*(X - X_hat))/np.linalg.norm((1-W)*X)
 
 def normalize_factor(factor, eps=1e-15):
     """Normalizes the columns of a factor matrix. 
