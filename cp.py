@@ -53,7 +53,14 @@ def permute_factors_and_weights(permutation, factors, weights):
     permuted_weights = weights[list(permutation)]
     return permuted_factors, permuted_weights
 
-def factor_match_score(true_factors, estimated_factors, weight_penalty=True):
+def factor_match_score(true_factors, estimated_factors, weight_penalty=True, fms_reduction='min'):
+    if fms_reduction == 'min':
+        fms_reduction = np.min
+    elif fms_reduction == 'mean':
+        fms_reduction = np.mean
+    else:
+        raise ValueError('́`fms_reduction` must be either "min" or "mean".')
+
     rank = true_factors[0].shape[1]
 
     max_fms = -1
@@ -62,7 +69,7 @@ def factor_match_score(true_factors, estimated_factors, weight_penalty=True):
     for permutation in itertools.permutations(range(rank),r=rank):
         permuted_factors = permute_factors(permutation, estimated_factors)
         
-        fms = min(_factor_match_score(true_factors, permuted_factors, weight_penalty=weight_penalty))
+        fms = fms_reduction(_factor_match_score(true_factors, permuted_factors, weight_penalty=weight_penalty))
 
         if fms > max_fms:
             max_fms = fms
@@ -106,13 +113,15 @@ def create_non_negative_data(sizes, rank, noise_factor=0):
 def tensor_completion_score(X, X_hat, W):
     return np.linalg.norm((1-W)*(X - X_hat))/np.linalg.norm((1-W)*X)
 
-def normalize_factor(factor):
+def normalize_factor(factor, eps=1e-15):
     """Normalizes the columns of a factor matrix. 
     
     Parameters:
     -----------
     factor: np.ndarray
         Factor matrix to normalize.
+    eps: float
+        Epsilon used to prevent division by zero.
 
     Returns:
     --------
@@ -122,7 +131,7 @@ def normalize_factor(factor):
         Norms of the columns before normalization.
     """
     norms = np.linalg.norm(factor, axis=0, keepdims=True)
-    return factor/norms, norms
+    return factor/(norms+eps), norms
 
 def normalize_factors(factors):
     """Normalizes the columns of each element in list of factors
@@ -151,6 +160,17 @@ def normalize_factors(factors):
 
     return normalized_factors, norms
 
+def _find_first_nonzero_sign(factor):
+    """Returns the sign of the first nonzero element of `factor`
+    """
+    sign = 0
+    for el in factor:
+        if sign != 0:
+            break
+        sign = np.sign(el)
+    
+    return sign
+
 def prepare_for_comparison(factors):
     """Normalize factors and flip the signs.
 
@@ -161,10 +181,15 @@ def prepare_for_comparison(factors):
     signs = []
     for i, factor in enumerate(normalized_factors):
         sign = np.sign(np.mean(np.sign(factor), axis=0))
+
+        # Resolve zero-signs so they are equal to sign of first nonzero element
+        for k, s in enumerate(sign):
+            if s == 0:
+                sign[k] = _find_first_nonzero_sign(factor[:, k])
+        
         normalized_factors[i] *= sign
         signs.append(sign)
     return normalized_factors, signs, norms
-
 
 def _initialize_factors_random(shape, rank):
     """Random initialization of factor matrices"""
