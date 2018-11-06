@@ -3,7 +3,9 @@
 .pytest_cache/
 
 *.pyc
+*.mat
 
 Untitled*.ipynb
 
 .vscode/
+
