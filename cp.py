@@ -27,8 +27,12 @@ def _initialize_factors_svd(X, rank):
     """SVD based initialization of factor matrices"""
     n_modes = len(X.shape)
     factors =[]
+    if rank > min(X.shape):
+        raise ValueError(f'SVD initialisation does not work when rank is larger than the smallest dimension of X.\
+                          (rank:{rank}, dimensions: {X.shape})')
     for i in range(n_modes):
         u, s, vh = np.linalg.svd(base.unfold(X,i))
+
         factors.append(u[:,:rank])
     return factors
     
