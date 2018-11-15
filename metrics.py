@@ -59,6 +59,9 @@ def tensor_completion_score(X, X_hat, W):
 
 
 def core_consistency(X, A, B, C):
+    """
+    Normalized core consistency
+    """
     F = A.shape[1]
     F = A.shape[1]
 
@@ -72,12 +75,13 @@ def core_consistency(X, A, B, C):
     vec_X = X.reshape((-1, 1))
     vec_G = np.linalg.pinv(k).T@vec_X
 
-    return 100*(1-sum((vec_G-vec_T)**2)/F).squeeze()
+    norm = np.sum(vec_G**2)
+    return 100*(1-sum((vec_G-vec_T)**2)/norm).squeeze()
 
 def calculate_core_consistencies(X, upper_rank=5):
     core_consistencies = []
     for k in range(1,upper_rank+1):
-         factors, result, initial_factors, log  = cp.cp_opt(X, rank=k, method='cg', init='random', gtol=1e-10)
+         factors, result, initial_factors, log  = cp.cp_opt(X, rank=k, method='cg', init='svd', gtol=1e-10)
          A, B, C = factors
          c = core_consistency(X, A, B, C)
          core_consistencies.append(c)
