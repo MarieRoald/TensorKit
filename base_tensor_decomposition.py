@@ -1,5 +1,6 @@
 import numpy as np
 import base
+import utils
 
 class BaseTensorDecomposition:
     def __init__(self):
@@ -19,8 +20,33 @@ class Base_CP(BaseTensorDecomposition):
     def __init__(self, rank, init_scheme):
         pass
 
-    def init_factors(self, tensor, rank, init_scheme):
-        pass
+    def init_factors(self, tensor, rank, init_scheme='random'):
+        """Initialize factor matrices.
+
+        Method of initialization is decided by `init_scheme`. If `init_scheme == 'random'`, the 
+        factor matrices are initialized randomly. If `init_scheme == 'svd'`, the nth factor
+        matrix is initialized as the `rank` left singular vectors of the input tensor unfolded
+        in the nth mode. 
+        
+        Parameters:
+        -----------
+        tensor: np.ndarray
+            Tensor we are attempting to model with CP.
+        rank: int
+            The number of compononents in the model
+        init_scheme: str (optional)
+            String defining which init scheme to use. Must be 'random' (default) or 'svd'
+
+        """
+        if init_scheme == 'random':
+            factors = self._random_init(tensor, rank)
+        elif init_scheme == 'svd':
+            factors = self._svd_init(tensor, rank)
+        else:
+            raise ValueError(f'Unknown init_scheme "{init_scheme}", use "svd" or "random"')
+    
+        weights = np.ones((len(tensor.shape), rank))
+        return [utils.normalize_factor(f)[0] for f in factors], weights
 
     def _random_init(self, tensor, rank):
         """Random initialization of factor matrices.
@@ -33,7 +59,7 @@ class Base_CP(BaseTensorDecomposition):
         tensor: np.ndarray
             Tensor we are attempting to model with CP.
         rank: int
-            the number of compononents in the model
+            The number of compononents for the model
 
         Returns:
         --------
@@ -57,7 +83,7 @@ class Base_CP(BaseTensorDecomposition):
         tensor: np.ndarray
             Tensor we are attempting to model with CP.
         rank: int
-            the number of compononents in the model
+            The number of compononents for the model
 
         Returns:
         --------
@@ -91,3 +117,4 @@ class CP_als(Base_CP):
 
     def decompose(self, tensor):
         pass
+    
