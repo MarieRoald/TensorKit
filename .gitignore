@@ -9,3 +9,5 @@ Untitled*.ipynb
 
 .vscode/
 
+datasets/gcwine.mat
+

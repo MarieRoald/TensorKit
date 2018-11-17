@@ -63,7 +63,9 @@ def update_F_A_D(X,P_k, F, A, D, rank):
         X_hat[...,k] = P_k[k].T @ X[k]
         
     factors, weights = cp.update_als_factors(X_hat, factors, weights)
-    F, A, C = factors
+
+    weights = weights.prod(0, keepdims=True)**(1/3)
+    F, A, C = (weights*factor for factor in factors)
     
     for k in range(K):
         D[...,k] = np.diag(C[k])
