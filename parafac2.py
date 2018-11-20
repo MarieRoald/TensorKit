@@ -6,6 +6,7 @@ import itertools
 
 import cp
 import base
+import utils
 
 
 def _get_pca_loadings(Y, rank):
@@ -65,16 +66,16 @@ def _update_F_A_D(X, P_k, F, A, D_k, rank):
     K = len(X)
     J = X[0].shape[1]
     factors = [F, A, C]
-    weights = np.ones((3, rank))
+    #weights = np.ones((3, rank))
     X_hat = np.empty((rank, J, K))
 
     for k in range(K):
         X_hat[...,k] = P_k[k].T @ X[k]
         
-    factors, weights = cp.update_als_factors(X_hat, factors, weights)
+    factors = update_als_factors_p2(X_hat, factors)
 
-    weights = weights.prod(0, keepdims=True)**(1/3)
-    F, A, C = (weights*factor for factor in factors)
+    #weights = weights.prod(0, keepdims=True)**(1/3)
+    #F, A, C = (weights*factor for factor in factors)
     
     for k in range(K):
         D_k[...,k] = np.diag(C[k])
@@ -85,6 +86,25 @@ def _update_parafac2(X, P_k, F, A, D_k, rank):
     P_k = _update_P_k(X, F, A, D_k, rank)
     F, A, D_k = _update_F_A_D(X, P_k, F, A, D_k, rank)
     return P_k, F, A, D_k
+
+
+def update_als_factor_p2(X, factors, mode):
+    """Solve least squares problem to get factor for one mode."""
+    V = cp._compute_V(factors, mode)
+    
+    # Solve least squares problem
+    rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
+    new_factor = np.linalg.solve(V.T, rhs).T
+    
+    return new_factor
+    
+def update_als_factors_p2(X, factors):
+    """Updates factors with alternating least squares."""
+    num_axes = len(X.shape)
+    for axis in range(num_axes):
+        factors[axis] = update_als_factor_p2(X, factors, axis)
+        
+    return factors
 
 def compose_from_parafac2_factors(P_k, F, A, D_k):
     K = len(P_k)
@@ -138,3 +158,6 @@ def parafac2_als(X, rank, max_its=1000, convergence_th=1e-10, verbose=True):
                                                             verbose)
     return P_k, F, A, D_k
     
+
+def create_parafac2_components(n_values, other_sizes, rank):
+    utils.create_random_factors(other_sizes, rank)
