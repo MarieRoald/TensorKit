@@ -60,12 +60,14 @@ def _update_P_k(X, F, A, D_k, rank):
     return P_k
 
 def _update_F_A_D(X, P_k, F, A, D_k, rank):
+    # TODO: try without normalizing the weights
     C = np.diagonal(D_k)
     K = len(X)
     J = X[0].shape[1]
     factors = [F, A, C]
     weights = np.ones((3, rank))
     X_hat = np.empty((rank, J, K))
+
     for k in range(K):
         X_hat[...,k] = P_k[k].T @ X[k]
         
