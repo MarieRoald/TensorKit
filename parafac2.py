@@ -66,14 +66,16 @@ def _update_F_A_D(X, P_k, F, A, D_k, rank):
     K = len(X)
     J = X[0].shape[1]
     factors = [F, A, C]
-    #weights = np.ones((3, rank))
+    weights = np.ones((3, rank))
     X_hat = np.empty((rank, J, K))
 
     for k in range(K):
         X_hat[...,k] = P_k[k].T @ X[k]
         
-    factors = update_als_factors_p2(X_hat, factors)
-
+    factors, weights = cp.update_als_factors(X_hat, factors, weights)
+    F, A, C = factors[0], factors[1], factors[2]
+    weights = weights.prod(0, keepdims=True)
+    A *= weights
     #weights = weights.prod(0, keepdims=True)**(1/3)
     #F, A, C = (weights*factor for factor in factors)
     
@@ -153,11 +155,26 @@ def parafac2_als(X, rank, max_its=1000, convergence_th=1e-10, verbose=True):
 
         P_k, F, A, D_k = _update_parafac2(X, P_k, F, A, D_k, rank)
         pred = compose_from_parafac2_factors(P_k, F, A, D_k)
+
+        verb = (it % 50) == 0
         
         REL_FUNCTION_CHANGE, prev_loss = _check_convergence(it, X, pred, prev_loss,
-                                                            verbose)
+                                                            verb)
     return P_k, F, A, D_k
     
+def create_random_orthogonal_factor(dimension, rank):
+    return np.linalg.qr(np.random.randn(dimension, rank))[0]
 
-def create_parafac2_components(n_values, other_sizes, rank):
-    utils.create_random_factors(other_sizes, rank)
+def create_parafac2_components(n_values, m, rank):
+    sizes = (rank, m, len(n_values))
+
+     
+    (F, A, C), _ = utils.create_random_factors(sizes, rank)
+    P_k = [create_random_orthogonal_factor(ni, rank) for ni in n_values]
+
+    D_k = np.zeros((rank, rank, len(n_values)))
+    for k in range(len(n_values)):
+        D_k[..., k] = np.diag(C[k])
+    return P_k, F, A, D_k
+
+    
