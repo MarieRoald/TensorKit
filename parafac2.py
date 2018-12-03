@@ -57,7 +57,11 @@ def _update_P_k(X, F, A, D_k, rank):
     P_k = []
     for k in range(K):
         U, S, Vh = np.linalg.svd(F @ D_k[...,k] @ (A.T @ X[k].T),  full_matrices=False)
-        P_k.append(Vh.T@U.T)
+        
+        S_tol = max(U.shape)*S[0]*(1e-16)
+        should_keep = np.diag(S > S_tol).astype(float)
+
+        P_k.append(Vh.T@should_keep@U.T)
     return P_k
 
 def _update_F_A_D(X, P_k, F, A, D_k, rank):
@@ -72,10 +76,13 @@ def _update_F_A_D(X, P_k, F, A, D_k, rank):
     for k in range(K):
         X_hat[...,k] = P_k[k].T @ X[k]
         
-    factors, weights = cp.update_als_factors(X_hat, factors, weights)
-    F, A, C = factors[0], factors[1], factors[2]
-    weights = weights.prod(0, keepdims=True)
-    A *= weights
+    for i in range(1):
+        factors = [F, A, C]
+        weights = np.ones((3, rank))
+        factors, weights = cp.update_als_factors(X_hat, factors, weights)
+        F, A, C = factors[0], factors[1], factors[2]
+        weights = weights.prod(0, keepdims=True)
+        A *= weights
     #weights = weights.prod(0, keepdims=True)**(1/3)
     #F, A, C = (weights*factor for factor in factors)
     
