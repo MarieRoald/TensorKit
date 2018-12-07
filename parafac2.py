@@ -61,7 +61,9 @@ def _update_P_k(X, F, A, D_k, rank):
         S_tol = max(U.shape)*S[0]*(1e-16)
         should_keep = np.diag(S > S_tol).astype(float)
 
-        P_k.append(Vh.T@should_keep@U.T)
+        P_k.append(Vh.T @ should_keep @ U.T)   # should_keep = diag([1, 1, ..., 1, 0, 0, ..., 0]) -> the zeros correspond to small singular values
+                                               # Following Rasmus Bro's PARAFAC2 MATLAB script, which sets P_k = Q_k(Q_k'Q_k)^(-0.5) (line 524)
+                                               #      Where the power is done by truncating very small singular values (for numerical stability)
     return P_k
 
 def _update_F_A_D(X, P_k, F, A, D_k, rank):
@@ -76,13 +78,11 @@ def _update_F_A_D(X, P_k, F, A, D_k, rank):
     for k in range(K):
         X_hat[...,k] = P_k[k].T @ X[k]
         
-    for i in range(1):
-        factors = [F, A, C]
-        weights = np.ones((3, rank))
-        factors, weights = cp.update_als_factors(X_hat, factors, weights)
-        F, A, C = factors[0], factors[1], factors[2]
-        weights = weights.prod(0, keepdims=True)
-        A *= weights
+    # MATLAB performs up to five PARAFAC updates
+    factors, weights = cp.update_als_factors(X_hat, factors, weights)
+    F, A, C = factors[0], factors[1], factors[2]
+    weights = weights.prod(0, keepdims=True)
+    F *= weights
     #weights = weights.prod(0, keepdims=True)**(1/3)
     #F, A, C = (weights*factor for factor in factors)
     
@@ -164,6 +164,7 @@ def parafac2_als(X, rank, max_its=1000, convergence_th=1e-10, verbose=True):
         pred = compose_from_parafac2_factors(P_k, F, A, D_k)
 
         verb = (it % 50) == 0
+        verb = 1
         
         REL_FUNCTION_CHANGE, prev_loss = _check_convergence(it, X, pred, prev_loss,
                                                             verb)

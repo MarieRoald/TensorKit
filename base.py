@@ -50,6 +50,29 @@ def khatri_rao(*factors, skip=None):
 def matrix_khatri_rao_product(X, factors, mode):
     return unfold(X, mode) @ khatri_rao(*tuple(factors), skip=mode)
         
+def mttkrp(tensor, matrices, mode):
+    krp = khatri_rao(*matrices, skip=mode)
+    shape = tensor.shape
+    newshape = (*shape[:mode+1], -1)
+    unfolded_tensor = tensor.reshape(newshape)
+
+    num_for_loops = mode
+    def num_to_idx(num):
+        idx = []
+        for s in newshape[-3::-1]:
+            idx.append(num%s)
+            num //= s
+        return tuple(idx[::-1])
+
+    block_size = unfolded_tensor.shape[-1]
+    num_rows = unfolded_tensor.shape[-2]
+    num_cols = krp.shape[-1]
+    product = np.zeros((num_rows, num_cols))
+    for i in range(np.prod(shape[:mode]).astype(np.int16)):
+        product += unfolded_tensor[num_to_idx(i)]@krp[i*block_size:(i+1)*block_size]
+
+    return product
+
 def unfold(A, n):
     """Unfold tensor to matricizied form.
     

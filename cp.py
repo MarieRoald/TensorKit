@@ -72,8 +72,10 @@ def update_als_factor(X, factors, mode):
     V = _compute_V(factors, mode)
     
     # Solve least squares problem
-    rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
-    new_factor = np.linalg.solve(V.T, rhs).T
+    #rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
+    rhs = base.mttkrp(X, factors, mode).T
+    new_factor,res, rank, s = np.linalg.lstsq(V.T, rhs)
+    new_factor = new_factor.T
     
     return utils.normalize_factor(new_factor)
     
