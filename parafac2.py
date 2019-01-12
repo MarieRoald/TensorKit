@@ -16,17 +16,20 @@ def _get_pca_loadings(Y, rank):
     A = (Vh.T@np.diag(S))[:, :rank]
     return A
 
-def _init_A(X, rank):
+def _init_A(X, rank, init_scheme='svd'):
     """A is initialised as the PCA loadings from the sum of covariance matrices.
     """
     K = len(X)
-    Y = np.zeros([X[0].shape[1], X[0].shape[1]])
-    
-    for k in range(K):
-        Y += X[k].T@X[k]
+    J = X[0].shape[1]
+    if init_scheme == 'svd':
+        Y = np.zeros([J, J])
+        
+        for k in range(K):
+            Y += X[k].T@X[k]
 
-    A = _get_pca_loadings(Y, rank)
-
+        A = _get_pca_loadings(Y, rank)
+    else:
+        A = np.random.rand(J,rank)
     return A
 
 def _init_F(X, rank):
@@ -34,20 +37,37 @@ def _init_F(X, rank):
     """
     return np.identity(rank)
 
-def _init_D_k(X, rank):
+def _init_D_k(X, rank, init_scheme='svd'):
     """D is initialised as a sequence of identity matrices.
     """
     K = len(X)
+    C = _init_C(X, rank, init_scheme=init_scheme)
+
+    di = np.diag_indices(rank)
     D = np.zeros((rank, rank, K))
-    
+
     for k in range(K):
-        D[..., k] = np.identity(rank)
+        D[...,k][di] = C[k]
+
     return D
+
+def _init_C(X, rank, init_scheme='svd'):
+    K = len(X)
+    if init_scheme=='svd':
+        C = np.ones((K, rank))
+    else:
+        C = np.random.rand(K, rank)
+    return C
         
-def _init_parafac2(X, rank):
-    A = _init_A(X, rank)
+def _init_parafac2(X, rank, init_scheme='svd'):
+
+    if init_scheme!='svd' and init_scheme!='random':
+        raise ValueError(f'"init_scheme" has to be "random" or "svd". \
+                        {init_scheme} is not a valid initialisation option. ')
+
+    A = _init_A(X, rank, init_scheme=init_scheme)
     F = _init_F(X, rank)
-    D_k = _init_D_k(X, rank)
+    D_k = _init_D_k(X, rank, init_scheme=init_scheme)
     P_k = _update_P_k(X, F, A, D_k, rank)
     return P_k, A, F, D_k
 
@@ -61,7 +81,7 @@ def _update_P_k(X, F, A, D_k, rank):
         S_tol = max(U.shape)*S[0]*(1e-16)
         should_keep = np.diag(S > S_tol).astype(float)
 
-        P_k.append(Vh.T @ should_keep @ U.T)   # should_keep = diag([1, 1, ..., 1, 0, 0, ..., 0]) -> the zeros correspond to small singular values
+        P_k.append(Vh.T @ should_keep @ U.T)   # Should_keep = diag([1, 1, ..., 1, 0, 0, ..., 0]) -> the zeros correspond to small singular values
                                                # Following Rasmus Bro's PARAFAC2 MATLAB script, which sets P_k = Q_k(Q_k'Q_k)^(-0.5) (line 524)
                                                #      Where the power is done by truncating very small singular values (for numerical stability)
     return P_k
@@ -83,8 +103,8 @@ def _update_F_A_D(X, P_k, F, A, D_k, rank):
     F, A, C = factors[0], factors[1], factors[2]
     weights = weights.prod(0, keepdims=True)
     F *= weights
-    #weights = weights.prod(0, keepdims=True)**(1/3)
-    #F, A, C = (weights*factor for factor in factors)
+    # weights = weights.prod(0, keepdims=True)**(1/3)
+    # F, A, C = (weights*factor for factor in factors)
     
     for k in range(K):
         D_k[...,k] = np.diag(C[k])
@@ -102,7 +122,8 @@ def update_als_factor_p2(X, factors, mode):
     V = cp._compute_V(factors, mode)
     
     # Solve least squares problem
-    rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
+    #rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
+    rhs = base.matrix_khatri_rao_product(X, factors, mode)
     new_factor = np.linalg.solve(V.T, rhs).T
     
     return new_factor
@@ -148,9 +169,9 @@ def _check_convergence(iteration, X, pred, prev_loss, verbose):
         print(f'{iteration:4d}: loss is {loss:4.2f}, improvement is {REL_FUNCTION_ERROR:4.2f}')
     return REL_FUNCTION_ERROR, loss
 
-def parafac2_als(X, rank, max_its=1000, convergence_th=1e-10, verbose=True):
+def parafac2_als(X, rank, max_its=1000, convergence_th=1e-10, verbose=True, init_scheme='svd'):
     """Compute parafac2 decomposition with alternating least squares."""
-    P_k, A, F, D_k = _init_parafac2(X, rank)
+    P_k, A, F, D_k = _init_parafac2(X, rank, init_scheme=init_scheme)
 
     pred = compose_from_parafac2_factors(P_k, F, A, D_k)
     prev_loss = _parafac2_loss(X, pred)
@@ -163,11 +184,9 @@ def parafac2_als(X, rank, max_its=1000, convergence_th=1e-10, verbose=True):
         P_k, F, A, D_k = _update_parafac2(X, P_k, F, A, D_k, rank)
         pred = compose_from_parafac2_factors(P_k, F, A, D_k)
 
-        verb = (it % 50) == 0
-        verb = 1
         
         REL_FUNCTION_CHANGE, prev_loss = _check_convergence(it, X, pred, prev_loss,
-                                                            verb)
+                                                            verbose)
     return P_k, F, A, D_k
     
 def create_random_orthogonal_factor(dimension, rank):

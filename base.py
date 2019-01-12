@@ -1,12 +1,12 @@
 import numpy as np
+
 def khatri_rao_binary(A,B):
     """Calculates the Khatri-Rao product of A and B
     
     A and B have to have the same number of columns.
     """
-    
-    I,K = A.shape
-    J,K = B.shape
+    I, K = A.shape
+    J, K = B.shape
     
     out = np.empty(shape=[I*J,K])
     for k in range(K):
@@ -35,7 +35,6 @@ def khatri_rao(*factors, skip=None):
         matrix in `factors`. And M is the number of columns in all
         matrices in `factors`. 
     """
-
     factors = list(factors).copy()
     if skip is not None:
         factors.pop(skip)
@@ -65,6 +64,19 @@ def _mttkrp3(X, factors, mode):
 def _mttkrp_mid(tensor, matrices):
     krp = khatri_rao(*matrices, skip=1)
     return _mttkrp_mid_with_krp(tensor, krp)
+
+def _mttkrp_mid_with_krp(tensor, krp):
+    shape = tensor.shape
+
+    block_size = shape[-1]
+    num_rows = shape[-2]
+    num_cols = krp.shape[-1]
+    product = np.zeros((num_rows, num_cols))
+    for i in range(shape[0]):
+        idx = i % shape[0]
+        product += tensor[idx]@krp[i*block_size:(i+1)*block_size]
+
+    return product
 
 def unfold(A, n):
     """Unfold tensor to matricizied form.
