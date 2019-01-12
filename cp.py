@@ -115,7 +115,7 @@ def _check_convergence(iteration, X, pred, f_prev, verbose):
     return REL_FUNCTION_ERROR, f
 
 
-def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init="random", verbose=True):
+def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init="random", logger=None, verbose=True):
     """Compute cp decomposition with alternating least squares."""
 
     X_norm = np.sqrt(np.sum(X ** 2))
@@ -135,6 +135,10 @@ def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init="random", verbose=T
 
         pred = base.ktensor(*tuple(factors), weights=weights.prod(axis=0))
         REL_FUNCTION_CHANGE, f_prev = _check_convergence(it, X, pred, f_prev, verbose)
+
+        if logger is not None:
+            factors_ = [f*weights.prod(axis=0)[np.newaxis]**(1/len(factors)) for f in factors]
+            logger.log(factors_)
 
     return factors, weights.prod(axis=0)
 
@@ -250,13 +254,17 @@ def cp_opt(
     upper_bounds=None,
     gtol=1e-10,
     init="random",
+    logger=None,
 ):
     sizes = X.shape
     options = {"maxiter": max_its, "gtol": gtol}
 
     args = (rank, sizes, X)
 
-    logger = Logger(args=args, loss=_cp_loss_scipy, grad=_cp_grad_scipy)
+    # logger = Logger(args=args, loss=_cp_loss_scipy, grad=_cp_grad_scipy)
+    callback = None
+    if logger is not None:
+        callback = logger.log
 
     initial_factors, _ = initialize_factors(X, rank, method=init)
     initial_factors_flattened = base.flatten_factors(initial_factors)
@@ -271,7 +279,7 @@ def cp_opt(
         bounds=bounds,
         args=args,
         options=options,
-        callback=logger.log,
+        callback=callback,
     )
 
     factors = base.unflatten_factors(result.x, rank, sizes)
