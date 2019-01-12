@@ -47,9 +47,13 @@ def khatri_rao(*factors, skip=None):
     return product
 
 def matrix_khatri_rao_product(X, factors, mode):
+    assert len(X.shape) == len(factors)
+    if len(factors) == 3:
+        return _mttkrp3(X, factors, mode)
+
     return unfold(X, mode) @ khatri_rao(*tuple(factors), skip=mode)
         
-def mttkrp3(X, factors, mode):
+def _mttkrp3(X, factors, mode):
     if mode == 0:
         return X.reshape(X.shape[0], -1) @ khatri_rao(*tuple(factors), skip=mode)
     elif mode == 1:

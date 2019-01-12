@@ -49,12 +49,9 @@ def _init_D_k(X, rank, init_scheme='svd'):
     for k in range(K):
         D[...,k][di] = C[k]
 
-
-
     return D
 
 def _init_C(X, rank, init_scheme='svd'):
-
     K = len(X)
     if init_scheme=='svd':
         C = np.ones((K, rank))
@@ -84,7 +81,7 @@ def _update_P_k(X, F, A, D_k, rank):
         S_tol = max(U.shape)*S[0]*(1e-16)
         should_keep = np.diag(S > S_tol).astype(float)
 
-        P_k.append(Vh.T @ should_keep @ U.T)   # should_keep = diag([1, 1, ..., 1, 0, 0, ..., 0]) -> the zeros correspond to small singular values
+        P_k.append(Vh.T @ should_keep @ U.T)   # Should_keep = diag([1, 1, ..., 1, 0, 0, ..., 0]) -> the zeros correspond to small singular values
                                                # Following Rasmus Bro's PARAFAC2 MATLAB script, which sets P_k = Q_k(Q_k'Q_k)^(-0.5) (line 524)
                                                #      Where the power is done by truncating very small singular values (for numerical stability)
     return P_k
@@ -106,8 +103,8 @@ def _update_F_A_D(X, P_k, F, A, D_k, rank):
     F, A, C = factors[0], factors[1], factors[2]
     weights = weights.prod(0, keepdims=True)
     F *= weights
-    #weights = weights.prod(0, keepdims=True)**(1/3)
-    #F, A, C = (weights*factor for factor in factors)
+    # weights = weights.prod(0, keepdims=True)**(1/3)
+    # F, A, C = (weights*factor for factor in factors)
     
     for k in range(K):
         D_k[...,k] = np.diag(C[k])
@@ -125,7 +122,8 @@ def update_als_factor_p2(X, factors, mode):
     V = cp._compute_V(factors, mode)
     
     # Solve least squares problem
-    rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
+    #rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
+    rhs = base.matrix_khatri_rao_product(X, factors, mode)
     new_factor = np.linalg.solve(V.T, rhs).T
     
     return new_factor
