@@ -1,12 +1,12 @@
 import numpy as np
+
 def khatri_rao_binary(A,B):
     """Calculates the Khatri-Rao product of A and B
     
     A and B have to have the same number of columns.
     """
-    
-    I,K = A.shape
-    J,K = B.shape
+    I, K = A.shape
+    J, K = B.shape
     
     out = np.empty(shape=[I*J,K])
     for k in range(K):
@@ -35,7 +35,6 @@ def khatri_rao(*factors, skip=None):
         matrix in `factors`. And M is the number of columns in all
         matrices in `factors`. 
     """
-
     factors = list(factors).copy()
     if skip is not None:
         factors.pop(skip)
@@ -50,26 +49,28 @@ def khatri_rao(*factors, skip=None):
 def matrix_khatri_rao_product(X, factors, mode):
     return unfold(X, mode) @ khatri_rao(*tuple(factors), skip=mode)
         
-def mttkrp(tensor, matrices, mode):
-    krp = khatri_rao(*matrices, skip=mode)
+def mttkrp3(X, factors, mode):
+    if mode == 0:
+        return X.reshape(X.shape[0], -1) @ khatri_rao(*tuple(factors), skip=mode)
+    elif mode == 1:
+        return _mttkrp_mid(X, factors)
+    elif mode == 2 or mode == -1:
+        return np.moveaxis(X, -1, 0).reshape(X.shape[-1], -1) @ khatri_rao(*tuple(factors), skip=mode)
+    
+def _mttkrp_mid(tensor, matrices):
+    krp = khatri_rao(*matrices, skip=1)
+    return _mttkrp_mid_with_krp(tensor, krp)
+
+def _mttkrp_mid_with_krp(tensor, krp):
     shape = tensor.shape
-    newshape = (*shape[:mode+1], -1)
-    unfolded_tensor = tensor.reshape(newshape)
 
-    num_for_loops = mode
-    def num_to_idx(num):
-        idx = []
-        for s in newshape[-3::-1]:
-            idx.append(num%s)
-            num //= s
-        return tuple(idx[::-1])
-
-    block_size = unfolded_tensor.shape[-1]
-    num_rows = unfolded_tensor.shape[-2]
+    block_size = shape[-1]
+    num_rows = shape[-2]
     num_cols = krp.shape[-1]
     product = np.zeros((num_rows, num_cols))
-    for i in range(np.prod(shape[:mode]).astype(np.int16)):
-        product += unfolded_tensor[num_to_idx(i)]@krp[i*block_size:(i+1)*block_size]
+    for i in range(shape[0]):
+        idx = i % shape[0]
+        product += tensor[idx]@krp[i*block_size:(i+1)*block_size]
 
     return product
 
