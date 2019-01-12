@@ -2,10 +2,12 @@ import numpy as np
 import base
 import cp
 
+
 def create_random_factors(sizes, rank):
     factors = [np.random.randn(size, rank) for size in sizes]
     factors, norms = normalize_factors(factors)
     return factors, norms
+
 
 def create_data(sizes, rank, noise_factor=0):
     factors, norms = create_random_factors(sizes=sizes, rank=rank)
@@ -15,13 +17,15 @@ def create_data(sizes, rank, noise_factor=0):
     noise /= np.linalg.norm(noise)
     noise *= np.linalg.norm(tensor)
 
-    tensor += noise_factor*noise
+    tensor += noise_factor * noise
     return tensor, factors, norms, noise
 
-def create_random_uniform_factors(sizes, rank, ):
+
+def create_random_uniform_factors(sizes, rank):
     factors = [np.random.uniform(size=(size, rank)) for size in sizes]
     factors, norms = normalize_factors(factors)
     return factors, norms
+
 
 def create_non_negative_data(sizes, rank, noise_factor=0):
     factors, norms = create_random_uniform_factors(sizes=sizes, rank=rank)
@@ -31,16 +35,19 @@ def create_non_negative_data(sizes, rank, noise_factor=0):
     noise /= np.linalg.norm(noise)
     noise *= np.linalg.norm(tensor)
 
-    tensor += noise_factor*noise
+    tensor += noise_factor * noise
     return tensor, factors, norms, noise
+
 
 def permute_factors(permutation, factors):
     return [factor[:, permutation] for factor in factors]
+
 
 def permute_factors_and_weights(permutation, factors, weights):
     permuted_factors = [factor[:, permutation] for factor in factors]
     permuted_weights = weights[list(permutation)]
     return permuted_factors, permuted_weights
+
 
 def normalize_factor(factor, eps=1e-15):
     """Normalizes the columns of a factor matrix. 
@@ -60,7 +67,8 @@ def normalize_factor(factor, eps=1e-15):
         Norms of the columns before normalization.
     """
     norms = np.linalg.norm(factor, axis=0, keepdims=True)
-    return factor/(norms+eps), norms
+    return factor / (norms + eps), norms
+
 
 def normalize_factors(factors):
     """Normalizes the columns of each element in list of factors
@@ -89,6 +97,7 @@ def normalize_factors(factors):
 
     return normalized_factors, norms
 
+
 def _find_first_nonzero_sign(factor):
     """Returns the sign of the first nonzero element of `factor`
     """
@@ -97,8 +106,10 @@ def _find_first_nonzero_sign(factor):
         if sign != 0:
             break
         sign = np.sign(el)
-    
+
     return sign
+
+
 def prepare_for_comparison(factors):
     """Normalize factors and flip the signs.
 
@@ -114,7 +125,7 @@ def prepare_for_comparison(factors):
         for k, s in enumerate(sign):
             if s == 0:
                 sign[k] = _find_first_nonzero_sign(factor[:, k])
-        
+
         normalized_factors[i] *= sign
         signs.append(sign)
     return normalized_factors, signs, norms

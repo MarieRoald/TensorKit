@@ -1,17 +1,16 @@
 import numpy as np
 import base
 
-class Logger:
 
+class Logger:
     def __init__(self, args, loss, grad):
         self.loss_values = []
         self.gradients = []
-        self.gradient_values = []   
+        self.gradient_values = []
         self.args = args
 
         self.loss = loss
         self.grad = grad
-
 
     def log(self, parameters):
 
@@ -23,5 +22,3 @@ class Logger:
         self.loss_values.append(loss)
         self.gradients.append(gradients)
         self.gradient_values.append(np.linalg.norm(grad))
-
-        
