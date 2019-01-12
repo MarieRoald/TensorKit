@@ -52,6 +52,37 @@ def factor_match_score(true_factors, estimated_factors, weight_penalty=True, fms
             max_fms = fms
             best_permutation = permutation
     return max_fms, best_permutation
+
             
 def tensor_completion_score(X, X_hat, W):
     return np.linalg.norm((1-W)*(X - X_hat))/np.linalg.norm((1-W)*X)
+
+
+def core_consistency(X, A, B, C):
+    """
+    Normalized core consistency
+    """
+    F = A.shape[1]
+    F = A.shape[1]
+
+    k = np.kron(A.T,np.kron(B.T,C.T))
+    #k = base.kron(A.T,B.T,C.T)
+
+    T = np.zeros((F,F,F))
+    np.fill_diagonal(T, 1)
+
+    vec_T = T.reshape((-1, 1))
+    vec_X = X.reshape((-1, 1))
+    vec_G = np.linalg.pinv(k).T@vec_X
+
+    norm = np.sum(vec_G**2)
+    return 100*(1-sum((vec_G-vec_T)**2)/norm).squeeze()
+
+def calculate_core_consistencies(X, upper_rank=5):
+    core_consistencies = []
+    for k in range(1,upper_rank+1):
+         factors, result, initial_factors, log  = cp.cp_opt(X, rank=k, method='cg', init='svd', gtol=1e-10)
+         A, B, C = factors
+         c = core_consistency(X, A, B, C)
+         core_consistencies.append(c)
+    return core_consistencies

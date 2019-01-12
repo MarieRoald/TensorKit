@@ -46,6 +46,16 @@ def khatri_rao(*factors, skip=None):
         product = khatri_rao_binary(product, factors[i])
     return product
 
+def kron(*factors):
+    factors = list(factors).copy()
+    num_factors = len(factors)
+    product = factors[0]
+
+    for i in range(1, num_factors):
+        product = np.kron(product, factors[i])
+    return product
+
+
 def matrix_khatri_rao_product(X, factors, mode):
     assert len(X.shape) == len(factors)
     if len(factors) == 3:
