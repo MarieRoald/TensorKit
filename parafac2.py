@@ -176,6 +176,11 @@ def _MSE(X, X_pred):
     X_pred_ = np.concatenate([xp.ravel() for xp in X_pred])
     return np.mean((X_ - X_pred_) ** 2)
 
+def _SSE(X, X_pred):
+    X_ = np.concatenate([x.ravel() for x in X])
+    X_pred_ = np.concatenate([xp.ravel() for xp in X_pred])
+    return np.sum((X_ - X_pred_) ** 2) 
+
 
 def _check_convergence(iteration, X, pred, prev_loss, verbose):
     loss = _parafac2_loss(X, pred)
@@ -190,7 +195,7 @@ def _check_convergence(iteration, X, pred, prev_loss, verbose):
 
 
 def parafac2_als(
-    X, rank, max_its=1000, convergence_th=1e-10, verbose=True, init_scheme="svd"
+    X, rank, max_its=1000, convergence_th=1e-10, verbose=True, init_scheme="svd", logger=None
 ):
     """Compute parafac2 decomposition with alternating least squares."""
     P_k, A, F, D_k = _init_parafac2(X, rank, init_scheme=init_scheme)
@@ -209,6 +214,8 @@ def parafac2_als(
         REL_FUNCTION_CHANGE, prev_loss = _check_convergence(
             it, X, pred, prev_loss, verbose
         )
+        if logger is not None:
+            logger.log([P_k, F, A, D_k, pred])
     return P_k, F, A, D_k
 
 
