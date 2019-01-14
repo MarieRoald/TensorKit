@@ -283,7 +283,7 @@ def cp_opt(
     )
 
     factors = base.unflatten_factors(result.x, rank, sizes)
-    return factors, result, initial_factors, logger
+    return factors, result, initial_factors
 
 
 def create_bounds(lower_bounds, upper_bounds, sizes, rank):
