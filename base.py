@@ -55,7 +55,7 @@ def kron(*factors):
     product = factors[0]
 
     for i in range(1, num_factors):
-        product = np.kron(product, factors[i])
+        product = kron_binary(product, factors[i])
     return product
 
 def kron_binary(A, B):
