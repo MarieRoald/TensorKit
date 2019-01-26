@@ -57,7 +57,7 @@ def initialize_factors(X, rank, method="random"):
         for factor in method:
             if not isinstance(factor, np.ndarray):
                 raise ValueError('method must be either a string or a list of numpy arrays')
-            factors, norms = utils.normalize_factors(method)
+            factors, norms= utils.normalize_factors(method)
             weights = np.array(norms).squeeze()
 
     return [utils.normalize_factor(f)[0] for f in factors], weights
@@ -92,13 +92,15 @@ def update_als_factor(X, factors, mode):
     V = _compute_V(factors, mode)
 
     # Solve least squares problem
-    # rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
+    #_rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
     _rhs = base.matrix_khatri_rao_product(X, factors, mode).T
     #new_factor, res, rank, s = np.linalg.lstsq(V.T, rhs)
     #new_factor = new_factor.T
 
     Q, R = np.linalg.qr(V.T)
     new_factor = solve_triangular(R, Q.T @ _rhs).T
+
+    #new_factor = (np.linalg.pinv(V)@_rhs).T
 
     return utils.normalize_factor(new_factor)
 

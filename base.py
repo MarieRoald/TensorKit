@@ -58,6 +58,13 @@ def kron(*factors):
         product = np.kron(product, factors[i])
     return product
 
+def kron_binary(A, B):
+    n, m = A.shape
+    p, q = B.shape
+    kprod = A[:, np.newaxis, :, np.newaxis]*B[np.newaxis, :, np.newaxis, :]
+    return kprod.reshape(n*p, m*q)
+
+
 
 def matrix_khatri_rao_product(X, factors, mode):
     assert len(X.shape) == len(factors)
