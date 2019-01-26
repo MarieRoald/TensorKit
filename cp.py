@@ -45,11 +45,11 @@ def _initialize_factors_svd(X, rank):
 def initialize_factors(X, rank, method="random"):
     if method == "random":
         factors = _initialize_factors_random(X.shape, rank)
-        weights = np.ones((len(X.shape), rank))
+        weights = np.ones(rank)
 
     elif method == "svd":
         factors = _initialize_factors_svd(X, rank)
-        weights = np.ones((len(X.shape), rank))
+        weights = np.ones(rank)
 
     else:
         if not isinstance(method, Iterable):
@@ -58,7 +58,7 @@ def initialize_factors(X, rank, method="random"):
             if not isinstance(factor, np.ndarray):
                 raise ValueError('method must be either a string or a list of numpy arrays')
             factors, norms= utils.normalize_factors(method)
-            weights = np.array(norms).squeeze()
+            weights = np.array(norms).squeeze().prod(0)
 
     return [utils.normalize_factor(f)[0] for f in factors], weights
 
@@ -109,7 +109,7 @@ def update_als_factors(X, factors, weights):
     """Updates factors with alternating least squares."""
     num_axes = len(X.shape)
     for axis in range(num_axes):
-        factors[axis], weights[axis] = update_als_factor(X, factors, axis)
+        factors[axis], weights = update_als_factor(X, factors, axis)
 
     return factors, weights
 
@@ -146,11 +146,11 @@ def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init="random", logger=No
 
         factors, weights = update_als_factors(X, factors, weights)
 
-        pred = base.ktensor(*tuple(factors), weights=weights.prod(axis=0))
+        pred = base.ktensor(*tuple(factors), weights=weights)
         REL_FUNCTION_CHANGE, f_prev = _check_convergence(it, X, pred, f_prev, verbose)
 
         if logger is not None:
-            factors_ = [f*weights.prod(axis=0)[np.newaxis]**(1/len(factors)) for f in factors]
+            factors_ = [f*weights**(1/len(factors)) for f in factors]
             logger.log(factors_)
 
     return factors, weights.prod(axis=0)
