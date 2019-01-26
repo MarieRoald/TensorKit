@@ -1,4 +1,5 @@
 import numpy as np
+from collections.abc import Iterable
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
 import base
@@ -6,6 +7,7 @@ import utils
 from log import Logger
 
 from scipy import optimize
+from scipy.linalg import solve_triangular
 import itertools
 
 
@@ -40,17 +42,23 @@ def _initialize_factors_svd(X, rank):
         factors.append(u[:, :rank])
     return factors
 
-
 def initialize_factors(X, rank, method="random"):
     if method == "random":
         factors = _initialize_factors_random(X.shape, rank)
+        weights = np.ones((len(X.shape), rank))
+
     elif method == "svd":
         factors = _initialize_factors_svd(X, rank)
-    else:
-        # TODO: ERROR OR SOMETHING
-        factors = _initialize_factors_random(X.shape, rank)
+        weights = np.ones((len(X.shape), rank))
 
-    weights = np.ones((len(X.shape), rank))
+    else:
+        if not isinstance(method, Iterable):
+            raise ValueError('method must be either a string or a list of numpy arrays')
+        for factor in method:
+            if not isinstance(factor, np.ndarray):
+                raise ValueError('method must be either a string or a list of numpy arrays')
+            factors, norms = utils.normalize_factors(method)
+            weights = np.array(norms).squeeze()
 
     return [utils.normalize_factor(f)[0] for f in factors], weights
 
@@ -85,9 +93,12 @@ def update_als_factor(X, factors, mode):
 
     # Solve least squares problem
     # rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
-    rhs = base.matrix_khatri_rao_product(X, factors, mode).T
-    new_factor, res, rank, s = np.linalg.lstsq(V.T, rhs)
-    new_factor = new_factor.T
+    _rhs = base.matrix_khatri_rao_product(X, factors, mode).T
+    #new_factor, res, rank, s = np.linalg.lstsq(V.T, rhs)
+    #new_factor = new_factor.T
+
+    Q, R = np.linalg.qr(V.T)
+    new_factor = solve_triangular(R, Q.T @ _rhs).T
 
     return utils.normalize_factor(new_factor)
 
@@ -266,9 +277,10 @@ def cp_opt(
     if logger is not None:
         callback = logger.log
 
-    initial_factors, _ = initialize_factors(X, rank, method=init)
+    initial_factors, norms = initialize_factors(X, rank, method=init)
+    initial_factors = [initial_factor*norms[i] for i, initial_factor in enumerate(initial_factors)]
     initial_factors_flattened = base.flatten_factors(initial_factors)
-
+    
     bounds = create_bounds(lower_bounds, upper_bounds, sizes, rank)
 
     result = optimize.minimize(
