@@ -40,7 +40,7 @@ class Logger:
     
 
 class HDF5Logger(Logger):
-    def __init__(self, fname, ex_name, store_frequency, args, **targets):
+    def __init__(self, fname, ex_name, store_frequency, args, continue_old=False, **targets):
         """Log data to a HDF5 file.
 
         Parameters:
@@ -60,10 +60,15 @@ class HDF5Logger(Logger):
         self.fname = fname
         self.ex_name = ex_name
         self.store_frequency = store_frequency
-        self._init_h5_file()
-
-        self._it_num = 0
-        self._prev_write_it = 0
+        if not continue_old:
+            self._init_h5_file()
+            self._it_num = 0
+        else:
+            with h5py.File(self.fname, 'r') as h5:
+                target = list(targets.keys())[0]
+                self._it_num = len(h5[ex_name][target])
+        self._prev_write_it = self._it_num
+        self._first_write_it = self._prev_write_it
 
     def _init_h5_file(self):
         with h5py.File(self.fname, 'a') as h5:
@@ -86,7 +91,7 @@ class HDF5Logger(Logger):
             g = h5[self.ex_name]
             for target, values in self.target_values.items(): 
                 g[target].resize([self._it_num])
-                g[target][self._prev_write_it:] = values[self._prev_write_it:] 
+                g[target][self._prev_write_it:] = values[self._prev_write_it-self._first_write_it:] 
         self._prev_write_it = self._it_num
 
 class Experiment:
@@ -102,7 +107,7 @@ class Experiment:
             else:
                 g = h5[self.ex_name]
 
-    def run_experiment(self, X, experiment_function, experiment_params, final_eval, logger=None):
+    def run_experiment(self, X, experiment_function, experiment_params, final_eval, logger=None, continue_old=False):
         """
         Stores key-value pairs of outputs = experiment_function(**experiment_params) and 
         final_eval_metrics(experiment_params, outputs) as elements of the hdf5 file.
@@ -118,18 +123,28 @@ class Experiment:
         final_eval : function
             Takes two dicts as input, experiment_params and experiment_function(**experiment_params)
             Returns dict
+        continue_old : bool
+            If this is true, the init-parameter are not written to the experiment attributes.
         """
         outputs = experiment_function(X, **experiment_params, logger=logger)
         with h5py.File(self.fname, 'a') as h5:
             g = h5[self.ex_name]
             for param, value in experiment_params.items():
+                if param == 'init':
+                    continue
                 g.attrs[param] = value
             for pname, param in outputs.items():
-                g[pname] = param
+                if not continue_old:
+                    g[pname] = param
+                else:
+                    g[pname][...] = param
             
         final_eval_metrics = final_eval(X, experiment_params, outputs)
         with h5py.File(self.fname, 'a') as h5:
             g = h5[self.ex_name]
             for pname, param in final_eval_metrics.items():
-                g[pname] = param
+                if not continue_old:
+                    g[pname] = param
+                else:
+                    g[pname][...] = param
 
