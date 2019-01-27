@@ -1,6 +1,13 @@
 import numpy as np
 
 
+def kron_binary_vectors(u, v):
+    n, = u.shape
+    m, = v.shape
+    kprod = u[:, np.newaxis]*v[np.newaxis, :]
+    return kprod.reshape(n*m)
+
+
 def khatri_rao_binary(A, B):
     """Calculates the Khatri-Rao product of A and B
     
