@@ -11,7 +11,7 @@ def khatri_rao_binary(A, B):
 
     out = np.empty(shape=[I * J, K])
     for k in range(K):
-        out[:, k] = np.kron(A[:, k], B[:, k])
+        out[:, k] = kron_binary(A[:, k], B[:, k])
     return out
 
 
