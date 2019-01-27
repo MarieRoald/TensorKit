@@ -279,8 +279,8 @@ def cp_opt(
     if logger is not None:
         callback = logger.log
 
-    initial_factors, norms = initialize_factors(X, rank, method=init)
-    initial_factors = [initial_factor*norms[i] for i, initial_factor in enumerate(initial_factors)]
+    initial_factors, weights = initialize_factors(X, rank, method=init)
+    initial_factors = [initial_factor*weights**(1/len(sizes)) for i, initial_factor in enumerate(initial_factors)]
     initial_factors_flattened = base.flatten_factors(initial_factors)
     
     bounds = create_bounds(lower_bounds, upper_bounds, sizes, rank)
