@@ -129,7 +129,7 @@ def _check_convergence(iteration, X, pred, f_prev, verbose):
 
 
 def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init="random", logger=None, verbose=True):
-    """Compute cp decomposition with alternating least squares."""
+    """Compute cp decompositioinit_schemen with alternating least squares."""
 
     X_norm = np.sqrt(np.sum(X ** 2))
     num_axes = len(X.shape)
