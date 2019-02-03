@@ -17,8 +17,9 @@ def khatri_rao_binary(A, B):
     J, K = B.shape
 
     out = np.empty(shape=[I * J, K])
-    for k in range(K):
-        out[:, k] = kron_binary_vectors(A[:, k], B[:, k])
+    for i, row in enumerate(A):
+        # out[:, k] = kron_binary_vectors(A[:, k], B[:, k])
+        out[i*J:(i+1)*J] = row[np.newaxis, :]*B
     return out
 
 
