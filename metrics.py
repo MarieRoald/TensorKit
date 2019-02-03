@@ -11,6 +11,13 @@ def weight_score(weight1, weight2):
 
 
 def _factor_match_score(true_factors, estimated_factors, weight_penalty=True):
+
+    if len(true_factors[0].shape) == 1:
+        true_factors = [factor.reshape(-1,1) for factor in true_factors]
+    if len(estimated_factors[0].shape) == 1:
+        estimated_factors =  [factor.reshape(-1,1) for factor in estimated_factors] 
+    
+ 
     rank = true_factors[0].shape[1]
 
     # Make sure columns of factor matrices are normalized
@@ -83,11 +90,24 @@ def core_consistency(X, A, B, C):
 
     vec_T = T.reshape((-1, 1))
     vec_X = X.reshape((-1, 1))
-    vec_G = np.linalg.pinv(k).T @ vec_X
+    vec_G = np.linalg.lstsq(k.T, vec_X)[0]
 
     norm = np.sum(vec_G ** 2)
     return 100 * (1 - sum((vec_G - vec_T) ** 2) / norm).squeeze()
 
+def core_consistency_parafac2(X, P_k, F, A, D_k, rank):
+
+    rank = F.shape[0]
+    K = len(X) #TOOD: check if X is list or tensor
+    J = X[0].shape[1]
+
+    X_hat = np.empty((rank, J, K))
+
+    for k in range(K):
+        X_hat[..., k] = P_k[k].T @ X[k]
+
+    C = np.diagonal(D_k)
+    return core_consistency(X_hat, F, A, C)
 
 def calculate_core_consistencies(X, upper_rank=5):
     core_consistencies = []
