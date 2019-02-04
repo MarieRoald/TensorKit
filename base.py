@@ -1,5 +1,15 @@
 import numpy as np
 
+try:
+    from numba import jit, prange
+except ImportError:
+    withjit = False
+    jsafe_range = range
+else:
+    withjit = True
+    make_fast = jit(nopython=True, nogil=True, fastmath=True, parallel=True)
+    jsafe_range = prange
+
 
 def kron_binary_vectors(u, v):
     n, = u.shape
@@ -16,11 +26,17 @@ def khatri_rao_binary(A, B):
     I, K = A.shape
     J, K = B.shape
 
-    out = np.empty(shape=[I * J, K])
-    for i, row in enumerate(A):
+    out = np.empty((I * J, K))
+    # for k in range(K)
         # out[:, k] = kron_binary_vectors(A[:, k], B[:, k])
-        out[i*J:(i+1)*J] = row[np.newaxis, :]*B
+    ## for i, row in enumerate(A):
+        ## out[i*J:(i+1)*J] = row[np.newaxis, :]*B
+    for i in jsafe_range(I):
+        out[i*J:(i+1)*J] = A[i]*B
     return out
+
+if withjit:
+    khatri_rao_binary = make_fast(khatri_rao_binary)
 
 
 def khatri_rao(*factors, skip=None):
