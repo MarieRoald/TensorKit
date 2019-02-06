@@ -285,6 +285,7 @@ def cp_opt(
     
     bounds = create_bounds(lower_bounds, upper_bounds, sizes, rank)
 
+    gtol = gtol*np.prod(sizes)
     result = optimize.minimize(
         fun=_cp_loss_scipy,
         method=method,
