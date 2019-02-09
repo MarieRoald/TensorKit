@@ -270,7 +270,6 @@ def cp_opt(
     logger=None,
 ):
     sizes = X.shape
-
     gtol = gtol*np.prod(sizes)
     options = {"maxiter": max_its, "gtol": gtol}
 
