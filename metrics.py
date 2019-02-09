@@ -10,7 +10,7 @@ def weight_score(weight1, weight2):
     return np.abs(weight1 - weight2) / max(weight1, weight2)
 
 
-def _factor_match_score(true_factors, estimated_factors, weight_penalty=True):
+def _factor_match_score(true_factors, estimated_factors, weight_penalty=True, nonnegative=True):
 
     if len(true_factors[0].shape) == 1:
         true_factors = [factor.reshape(-1,1) for factor in true_factors]
@@ -35,7 +35,10 @@ def _factor_match_score(true_factors, estimated_factors, weight_penalty=True):
     for r in range(rank):
         score = 1 - weight_score(true_weights[r], estimated_weights[r])
         for true_factor, estimated_factor in zip(true_factors, estimated_factors):
-            score *= np.abs(true_factor[:, r].T @ estimated_factor[:, r])
+            if nonnegative:
+                score *= np.abs(true_factor[:, r].T @ estimated_factor[:, r])
+            else:
+                score *= true_factor[:, r].T @ estimated_factor[:, r]
 
         scores.append(score)
     return scores
@@ -75,25 +78,39 @@ def tensor_completion_score(X, X_hat, W):
     return np.linalg.norm((1 - W) * (X - X_hat)) / np.linalg.norm((1 - W) * X)
 
 
-def core_consistency(X, A, B, C):
-    """
-    Normalized core consistency
-    """
-    F = A.shape[1]
+def core_consistency(X, A, B, C, normalized=False):
     F = A.shape[1]
 
-    k = np.kron(A.T, np.kron(B.T, C.T))
-    # k = base.kron(A.T,B.T,C.T)
-
-    T = np.zeros((F, F, F))
+    # Create the superdiagonal tensor
+    T = np.zeros((F,F,F))
     np.fill_diagonal(T, 1)
+    
+    # Separate the weights evenly along the three modes
+    [A, B, C], norms = utils.normalize_factors((A, B, C))
+    weights = np.prod(np.concatenate(norms), axis=0, keepdims=True)
+    A *= weights**(1/3)
+    B *= weights**(1/3)
+    C *= weights**(1/3)
 
+    # Generate vectorized variables to find Tucker core    
+    k = base.kron(A.T, B.T, C.T)
     vec_T = T.reshape((-1, 1))
     vec_X = X.reshape((-1, 1))
-    vec_G = np.linalg.lstsq(k.T, vec_X)[0]
 
-    norm = np.sum(vec_G ** 2)
-    return 100 * (1 - sum((vec_G - vec_T) ** 2) / norm).squeeze()
+    # ALS-step to find Tucker core
+    Q, R = np.linalg.qr(k.T)
+    _rhs = Q.T @ vec_X
+    vec_G = scipy.linalg.solve_triangular(R, _rhs)
+
+    # Old versions
+    # _rhs = k @ vec_X
+    # _rhs = solve_triangular(R, _rhs, trans='T')
+    #   vec_G = np.linalg.lstsq(k.T, vec_X)[0]
+
+    denom = np.linalg.norm(vec_G)**2 if normalized else F
+    return np.squeeze(100*(1-sum((vec_G-vec_T)**2)/denom))
+
+
 
 def core_consistency_parafac2(X, P_k, F, A, D_k, rank):
 
