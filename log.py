@@ -95,17 +95,33 @@ class HDF5Logger(Logger):
         self._prev_write_it = self._it_num
 
 class Experiment:
-    def __init__(self, fname, ex_name):
+    def __init__(self, fname, ex_name, attributes=None, metadata=None):
         self.fname = fname
         self.ex_name = ex_name
-        self._init_h5_file()
+        self._init_h5_file(attributes, metadata)
 
-    def _init_h5_file(self):
+    def _init_h5_metadata(self, h5, metadata):
+        if 'metadata' not in h5:
+            g = h5.create_group('metadata')
+        else:
+            g = h5['metadata']
+
+        for name, value in metadata.items():
+            g[name] = value
+    
+    def _init_h5_file(self, attributes, metadata):
         with h5py.File(self.fname, 'a') as h5:
             if self.ex_name not in h5:
                 g = h5.create_group(self.ex_name)
             else:
                 g = h5[self.ex_name]
+
+            if attributes is not None:
+                for key, value in attributes.items():
+                    g.attrs[key] = value
+            
+            if metadata is not None:
+                self._init_h5_metadata(h5, metadata)
 
     def run_experiment(self, X, experiment_function, experiment_params, final_eval, logger=None, continue_old=False):
         """
