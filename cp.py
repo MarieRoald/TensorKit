@@ -8,6 +8,7 @@ from log import Logger
 
 from scipy import optimize
 from scipy.linalg import solve_triangular
+from scipy.optimize import nnls
 import itertools
 
 
@@ -90,6 +91,7 @@ def compute_V(factors, skip_mode):
 def update_als_factor(X, factors, mode):
     """Solve least squares problem to get factor for one mode."""
     V = _compute_V(factors, mode)
+    n = np.prod(V.shape)
 
     # Solve least squares problem
     #_rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
@@ -97,20 +99,45 @@ def update_als_factor(X, factors, mode):
     #new_factor, res, rank, s = np.linalg.lstsq(V.T, rhs)
     #new_factor = new_factor.T
 
-    Q, R = np.linalg.qr(V.T)
-    new_factor = solve_triangular(R, Q.T @ _rhs).T
+    # Q, R = np.linalg.qr(V.T)
+    U, S, W = np.linalg.svd(V.T, full_matrices=False)
+    # new_factor = solve_triangular(R, Q.T @ _rhs).T
+    new_factor = (W.T @ np.diag(1/(S + 1e-5/n)) @ U.T @ _rhs).T
 
     #new_factor = (np.linalg.pinv(V)@_rhs).T
 
     return utils.normalize_factor(new_factor)
 
+def update_als_factor_non_negative(X, factors, mode):
 
-def update_als_factors(X, factors, weights):
+    V = _compute_V(factors, mode)
+
+    _rhs = base.matrix_khatri_rao_product(X, factors, mode).T
+
+    new_factor_tmp = np.zeros_like(factors[mode].T)
+    for j in range(_rhs.shape[1]):
+        new_factor_tmp[:,j],_ = nnls(V.T, _rhs[:,j]) 
+    #for i in range()
+    #new_factor,_ = nnls(V, _rhs)
+    new_factor = new_factor_tmp.T
+
+    return utils.normalize_factor(new_factor)
+
+
+
+def update_als_factors(X, factors, weights, non_negativity_constraints=None):
     """Updates factors with alternating least squares."""
+    if non_negativity_constraints is None:
+        non_negativity_constraints = [False]*len(factors)
+
+    assert len(non_negativity_constraints) == len(factors)
+
     num_axes = len(X.shape)
     for axis in range(num_axes):
-        factors[axis], weights = update_als_factor(X, factors, axis)
-
+        if non_negativity_constraints[axis]:
+            factors[axis], weights = update_als_factor_non_negative(X, factors, axis) 
+        else:
+            factors[axis], weights = update_als_factor(X, factors, axis)
     return factors, weights
 
 
@@ -152,8 +179,7 @@ def cp_als(X, rank, max_its=1000, convergence_th=1e-10, init="random", logger=No
         if logger is not None:
             factors_ = [f*weights**(1/len(factors)) for f in factors]
             logger.log(factors_)
-
-    return factors, weights.prod(axis=0)
+    return factors, weights
 
 
 def cp_loss(factors, tensor):
@@ -257,6 +283,39 @@ def _cp_grad_scipy(A, *args):
     grad = cp_grad(factors, X)
     return base.flatten_factors(grad)
 
+def cp_checkpoint_saver(h5_group, it, factors, weights):
+    if 'checkpoint' not in h5_group:
+        h5_group.create_group('checkpoint')
+
+    chk_group = h5_group('checkpoint')
+    assert f'it_{it:05d}' not in chk_group
+
+    chk_group = chk_group.create_group(f'it_{it:05d}')
+
+    chk_group.attrs['num_modes'] = len(factors)
+
+    for i, factor in enumerate(factors):
+        chk_group[f'factor_mode_{i}'] = factor
+
+    if weights != None:
+        chk_group['weights'] = weights
+    else:
+        chk_group['weights'] = np.ones((factors[0].shape[1]))
+
+def cp_checkpoint_loader(h5_group, it):
+    
+    chk_group = h5_group('checkpoint')
+    chk_group = chk_group[f'it_{it:05d}']
+
+    num_modes = chk_group.attrs['num_modes']
+    weights = chk_group['weights'][...]
+
+    factors = []
+    for i in range(num_modes):
+        factor = chk_group[f'factor_mode_{i}'][...]
+        factors.append(factor)
+
+    return factor, weights
 
 def cp_opt(
     X,
