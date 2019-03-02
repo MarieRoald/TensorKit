@@ -1,3 +1,4 @@
+from math import ceil
 import numpy as np
 import h5py
 import base
@@ -123,7 +124,8 @@ class Experiment:
             if metadata is not None:
                 self._init_h5_metadata(h5, metadata)
 
-    def run_experiment(self, X, experiment_function, experiment_params, final_eval, logger=None, continue_old=False):
+    def run_experiment(self, X, experiment_function, experiment_params, final_eval, 
+                       checkpoint_freq=200, logger=None, continue_old=False):
         """
         Stores key-value pairs of outputs = experiment_function(**experiment_params) and 
         final_eval_metrics(experiment_params, outputs) as elements of the hdf5 file.
@@ -142,7 +144,18 @@ class Experiment:
         continue_old : bool
             If this is true, the init-parameter are not written to the experiment attributes.
         """
-        outputs = experiment_function(X, **experiment_params, logger=logger)
+        #if 'max_its' not in experiment_params and checkpoint_saver is not None:
+        #    raise ValueError('Cannot checkpoint code if max_its is not set')
+        #elif 'max_its' in experiment_params and checkpoint_saver is not None:
+        #    max_its = experiment_params['max_its']
+        #    num_runs = ceil(max_its/checkpoint_freq)
+        #    experiment_params['max_its'] = checkpoint_freq
+
+        with h5py.File(self.fname, 'a') as h5:
+            outputs = experiment_function(X, **experiment_params, 
+                                          h5_group=h5[self.ex_name], logger=logger, 
+                                          load_old=continue_old)
+
         with h5py.File(self.fname, 'a') as h5:
             g = h5[self.ex_name]
             for param, value in experiment_params.items():
