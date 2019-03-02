@@ -29,14 +29,14 @@ def khatri_rao_binary(A, B):
     out = np.empty((I * J, K))
     # for k in range(K)
         # out[:, k] = kron_binary_vectors(A[:, k], B[:, k])
-    ## for i, row in enumerate(A):
-        ## out[i*J:(i+1)*J] = row[np.newaxis, :]*B
-    for i in jsafe_range(I):
-        out[i*J:(i+1)*J] = A[i]*B
+    for i, row in enumerate(A):
+        out[i*J:(i+1)*J] = row[np.newaxis, :]*B
+    #for i in jsafe_range(I):
+    #    out[i*J:(i+1)*J] = A[i]*B
     return out
 
-if withjit:
-    khatri_rao_binary = make_fast(khatri_rao_binary)
+#if withjit:
+#    khatri_rao_binary = make_fast(khatri_rao_binary)
 
 
 def khatri_rao(*factors, skip=None):
