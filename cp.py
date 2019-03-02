@@ -96,7 +96,7 @@ def update_als_factor(X, factors, mode):
     # Solve least squares problem
     #_rhs = (base.unfold(X, mode) @ base.khatri_rao(*tuple(factors), skip=mode)).T
     _rhs = base.matrix_khatri_rao_product(X, factors, mode).T
-    #new_factor, res, rank, s = np.linalg.lstsq(V.T, rhs)
+    #new_factor, res, rank, s = np.linalg.lstsq(V.T, _rhs)
     #new_factor = new_factor.T
 
     # Q, R = np.linalg.qr(V.T)
@@ -124,7 +124,6 @@ def update_als_factor_non_negative(X, factors, mode):
     return utils.normalize_factor(new_factor)
 
 
-
 def update_als_factors(X, factors, weights, non_negativity_constraints=None):
     """Updates factors with alternating least squares."""
     if non_negativity_constraints is None:
@@ -150,7 +149,7 @@ def _check_convergence(iteration, X, pred, f_prev, verbose):
 
     if verbose:
         print(
-            f"{iteration}: The MSE is {MSE:4f}, f is {f:4f}, improvement is {REL_FUNCTION_ERROR:4f}"
+            f"{iteration}: The MSE is {MSE:4f}, f is {f:4f}, improvement is {REL_FUNCTION_ERROR:4g}"
         )
     return REL_FUNCTION_ERROR, f
 
@@ -283,28 +282,35 @@ def _cp_grad_scipy(A, *args):
     grad = cp_grad(factors, X)
     return base.flatten_factors(grad)
 
-def cp_checkpoint_saver(h5_group, it, factors, weights):
+def cp_checkpoint_saver(h5_group, it, factors, weights, additional_datasets=None):
+    """Save the current weights factors in the specified h5 group.
+    """
     if 'checkpoint' not in h5_group:
         h5_group.create_group('checkpoint')
 
-    chk_group = h5_group('checkpoint')
+    chk_group = h5_group['checkpoint']
     assert f'it_{it:05d}' not in chk_group
-
     chk_group = chk_group.create_group(f'it_{it:05d}')
 
-    chk_group.attrs['num_modes'] = len(factors)
+    # Save additional datasets
+    if additional_datasets is not None:
+        for name, data in additional_datasets.items():
+            chk_group[name] = data
 
+    # Save factors
+    chk_group.attrs['num_modes'] = len(factors)
     for i, factor in enumerate(factors):
         chk_group[f'factor_mode_{i}'] = factor
 
-    if weights != None:
+    # Save weights
+    if weights is not None:
         chk_group['weights'] = weights
     else:
         chk_group['weights'] = np.ones((factors[0].shape[1]))
 
 def cp_checkpoint_loader(h5_group, it):
     
-    chk_group = h5_group('checkpoint')
+    chk_group = h5_group['checkpoint']
     chk_group = chk_group[f'it_{it:05d}']
 
     num_modes = chk_group.attrs['num_modes']
@@ -315,7 +321,55 @@ def cp_checkpoint_loader(h5_group, it):
         factor = chk_group[f'factor_mode_{i}'][...]
         factors.append(factor)
 
-    return factor, weights
+    return factors, weights
+
+def run_cp_opt_with_checkpoints(
+    X,
+    rank,
+    h5_group,
+    method="cg",
+    max_its=1000,
+    lower_bounds=None,
+    upper_bounds=None,
+    gtol=1e-10,
+    init="random", #ignorert dersom load_old = True?
+    logger=None,
+    checkpoint_freq=10, # TODO: hvordan sende inn denne?
+    load_old=False
+):
+    num_runs = int(np.ceil(max_its/checkpoint_freq))
+
+    it = 0
+    if load_old:
+        last_it_string = max(h5_group['checkpoint']) # TODO: option for å bestemme hvilken it? 
+        it = int(last_it_string.split("_")[1]) 
+        print(f'Loading it: {it} from {h5_group.name}')
+        factors, weights =  cp_checkpoint_loader(h5_group, it)
+        factors[0] = factors[0]*weights
+
+        init = factors
+
+    # Perform experiment
+    for _ in range(num_runs):
+        it += checkpoint_freq 
+        factors, result, initial_factors = cp_opt(
+            X,
+            rank,
+            method,
+            max_its=checkpoint_freq,
+            lower_bounds=lower_bounds,
+            upper_bounds=upper_bounds,
+            gtol=gtol,
+            init=init,
+            logger=logger
+        )
+        loss = result.fun
+
+
+        cp_checkpoint_saver(h5_group, it, factors, weights=np.ones((1, rank)), additional_datasets={'final_loss': loss})
+        init = factors
+
+    return factors, result, initial_factors
 
 def cp_opt(
     X,
