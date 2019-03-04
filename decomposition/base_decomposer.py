@@ -14,11 +14,11 @@ class BaseDecomposer(ABC):
     @abstractmethod
     def __init__(self):
         pass
-    
+
     @abstractmethod
-    def fit(self, X, y=None, *, max_its):
+    def init_components(self, precomputed_components=None):
         pass
-    
+
     @abstractproperty
     def reconstructed_X(self):
         pass
@@ -49,3 +49,34 @@ class BaseDecomposer(ABC):
     @abstractmethod
     def loss(self):
         pass
+   
+    @abstractmethod
+    def _fit(self):
+        pass
+
+    def fit(self, X, y=None, *, max_its=None, precomputed_components=None):
+        """Fit a tensor decomposition model. Precomputed components must be specified if init method is `precomputed`.
+
+        Arguments:
+        ----------
+        X : np.ndarray
+            The tensor to fit
+        y : None
+            Ignored, included to follow sklearn standards.
+        max_its : int (optional)
+            If set, then this will override the class's max_its.
+        precomputed_components : tuple
+            A tuple parametrising a Kruskal tensor.
+            The first element is a list of factor matrices and the second element is an array containing the weights.
+        """
+        self.init_components(precomputed_components=precomputed_components)
+        self.set_target(X)
+        if max_its is not None:
+            self.max_its = max_its
+
+        self._fit()
+    
+    def continue_fit(self, max_its=None):
+        if max_its is not None:
+            self.max_its = max_its
+        self._fit
