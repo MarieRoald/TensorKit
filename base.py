@@ -1,4 +1,5 @@
 import numpy as np
+from copy import copy
 from abc import ABC, abstractmethod
 try:
     from numba import jit, prange
@@ -237,7 +238,7 @@ class KruskalTensor(BaseDecomposedTensor):
     def __init__(self, factor_matrices, weights=None):
         self.rank = factor_matrices[0].shape[1]
 
-        for factor_matrix in factor_matrices:
+        for i, factor_matrix in enumerate(factor_matrices):
             if factor_matrix.shape[1] != self.rank:
                 raise ValueError(
                     f'All factor matrices must have the same number of columns. \n'
@@ -338,8 +339,16 @@ class EvolvingTensor(BaseDecomposedTensor):
         self._C = C
 
         self.warning = warning
-        self.all_same_size = all_same_size
+        self.all_same_size = self.check_all_same_size(B)
         self.slice_shapes = [(self.A.shape[0], B_k.shape[0]) for B_k in self.B]
+        self.num_elements = sum((shape[1] for shape in self.slice_shapes))
+
+    def check_all_same_size(self, matrices):
+        size = matrices[0].shape[0]
+        for matrix in matrices:
+            if size != matrix.shape[0]:
+                return False
+        return True
 
     @property
     def A(self):
@@ -357,11 +366,8 @@ class EvolvingTensor(BaseDecomposedTensor):
     def shape(self):
         """The shape of the tensor created by the `construct_tensor` function.
         """
-        if self.all_same_size:
-            return [fm.shape[0] for fm in [self.A, self.B, self.C]]
-        else:
-            matrix_width = max([m.shape[0] for m in self.B])
-            return [self.A.shape[0], matrix_width, self.C.shape[0]]
+        matrix_width = max([m.shape[0] for m in self.B])
+        return [self.A.shape[0], matrix_width, self.C.shape[0]]
     
     def construct_slices(self):
         slices = [None]*len(self.B)
@@ -376,24 +382,22 @@ class EvolvingTensor(BaseDecomposedTensor):
         loadings = self.A
         scores = self.C[k]*self.B[k]
 
-        return loadings @ scores
+        return loadings @ scores.T
 
     def construct_tensor(self):
-        if self.all_same_size:
-            shape = self.shape
-        else:
-            shape = [self.shape[0], max(self.shape[1]), self.shape[2]]
-            if self.warning:
-                raise Warning(
-                    'The factors have irregular shapes, zero padding will be used to construct tensor.\n'
-                    'Consider whether or not you want to call `construct_slices` instead.\n'
-                    'To supress this warning, pass warn=False at init.'
-                )
+        if self.warning and not self.all_same_size:
+            raise Warning(
+                'The factors have irregular shapes, zero padding will be used to construct tensor.\n'
+                'Consider whether or not you want to call `construct_slices` instead.\n'
+                'To supress this warning, pass warn=False at init.'
+            )
 
+        shape = self.shape
         constructed = np.zeros(shape)
         for k, _ in enumerate(self.slice_shapes):
             slice_ = self.construct_slice(k)
             constructed[:, :slice_.shape[1], k] = slice_
+        return constructed
         
 class ProjectedFactor:
     def __init__(self, factor, projection_matrices):
@@ -411,7 +415,7 @@ class ProjectedFactor:
 
 
 class Parafac2Tensor(EvolvingTensor):
-    def __init__(self, A, blueprint_B, C, projection_matrices, all_same_size=True, warning=True):
+    def __init__(self, A, blueprint_B, C, projection_matrices, warning=True):
         """A tensor whose second mode evolves over the third mode according to the PARAFAC2 constraints.
 
         Let $X_k$ be the $k$-th slice of the matrix along the third mode. The tensor can then be
@@ -438,10 +442,13 @@ class Parafac2Tensor(EvolvingTensor):
         self._blueprint_B = blueprint_B
         self._C = C
         self._projection_matrices = tuple(projection_matrices)
-        self.B = ProjectedFactor(blueprint_B, self._projection_matrices)
+        self._B = ProjectedFactor(blueprint_B, self._projection_matrices)
 
 
-        self.all_same_size = all_same_size
+        self.all_same_size = self.check_all_same_size(projection_matrices)
+        self.slice_shapes = [(self.A.shape[0], B_k.shape[0]) for B_k in self.B] 
+        self.num_elements = sum(shape[1] for shape in self.slice_shapes)
+
         self.warning = warning
 
 
@@ -459,20 +466,10 @@ class Parafac2Tensor(EvolvingTensor):
                 
     @property
     def D(self):
-        return np.array([np.diag(C[:, r]) for r in range(self.rank)])
-
-    def construct_slice(self, k):
-        """Construct the k-th slice along the third mode of the tensor.
-        """
-
-        loadings = self.A
-        scores = self.C * self.B[k]
-
-        return loadings @ scores
-
+        return np.array([np.diag(self.C[:, r]) for r in range(self.rank)])
 
     @classmethod
-    def random_init(cls, sizes, rank, random_method='normal'):
+    def random_init(cls, sizes, rank):
 
         # TODO: Check if we should use rand or randn
 
@@ -491,8 +488,8 @@ class Parafac2Tensor(EvolvingTensor):
         projection_matrices = []
 
         for second_mode_size in sizes[1]:
-            q, r = np.linalg.qr(np.random.randn(second_mode_size, rank), mode='complete')
+            q, r = np.linalg.qr(np.random.randn(second_mode_size, rank))
             projection_matrices.append(q[:rank])
 
         
-        return cls(A, blueprint_B, C, projection_matrices, all_same_size))
+        return cls(A, blueprint_B, C, projection_matrices, all_same_size)
