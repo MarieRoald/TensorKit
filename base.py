@@ -314,7 +314,7 @@ class KruskalTensor(BaseDecomposedTensor):
 
 
 class EvolvingTensor(BaseDecomposedTensor):
-    def __init__(self, factor_matrices, all_same_size=True, warning=True):
+    def __init__(self, A, B, C, all_same_size=True, warning=True):
         """A tensor whose second mode evolves over the third mode.
 
         Arguments:
@@ -329,27 +329,42 @@ class EvolvingTensor(BaseDecomposedTensor):
             Whether or nor a warning should be raised when construct
             tensor is called if all the matrices are not the same size.
         """
-        self.factor_matrices = factor_matrices
+        self.rank = A.shape[1]
+        #self.factor_matrices = factor_matrices
+        self._A = A
+        self._B = B
+        self._C = C
+
         self.warning = warning
 
-        if all_same_size:
-            self.factor_matrices = [np.array(fm) for fm in factor_matrices]
         self.all_same_size = all_same_size
 
-        self.slice_shapes = [(self.factor_matrices.shape[0], fm.shape[0]) for fm in self.factor_matrices[1]]
+        self.slice_shapes = [(self.A.shape[0], B_k.shape[0]) for B_k in self.B]
+
+    @property
+    def A(self):
+        return self._A
+    
+    @property
+    def B(self):
+        return self._B
+        
+    @property
+    def C(self):
+        return self._C
     
     @property
     def shape(self):
         """The shape of the tensor created by the `construct_tensor` function.
         """
         if self.all_same_size:
-            return [fm.shape[0] for fm in self.factor_matrices]
+            return [fm.shape[0] for fm in [self.A, self.B, self.C]]
         else:
-            matrix_width = max([m.shape[0] for m in self.factor_matrices[1]])
-            return [self.factor_matrices[0].shape[0], matrix_width, self.factor_matrices[2].shape[0]]
+            matrix_width = max([m.shape[0] for m in self.B])
+            return [self.A.shape[0], matrix_width, self.C.shape[0]]
     
     def construct_slices(self):
-        slices = [None]*len(self.factor_matrices[1])
+        slices = [None]*len(self.B)
         for k, matrix_size in enumerate(self.slice_shapes):
             slices[k] = self.construct_slice(k)
         
@@ -358,8 +373,8 @@ class EvolvingTensor(BaseDecomposedTensor):
     def construct_slice(self, k):
         """Construct the k-th slice along the third mode of the tensor.
         """
-        loadings = self.factor_matrices[0]
-        scores = self.factor_matrices[2][k]*self.factor_matrices[1][k]
+        loadings = self.A
+        scores = self.C[k]*self.B[k]
 
         return loadings @ scores
 
@@ -381,11 +396,23 @@ class EvolvingTensor(BaseDecomposedTensor):
             constructed[:, :slice_.shape[1], k] = slice_
         
         
-
+class ProjectedFactor:
+    def __init__(self, factor, projection_matrices):
+        self.factor = factor
+        self.projection_matrices = projection_matrices
+    
+    def __getitem__(self, k):
+        return self.projection_matrices[k]@self.factor
+    
+    def __len__(self):
+        return len(self.projection_matrices)
+    
+    def as_list(self):
+        return list(self)
 
 
 class Parafac2Tensor(EvolvingTensor):
-    def __init__(self, A, B, C, projection_matrices, all_same_size=True, warning=True):
+    def __init__(self, A, blueprint_B, C, projection_matrices, all_same_size=True, warning=True):
         """A tensor whose second mode evolves over the third mode according to the PARAFAC2 constraints.
 
         Let $X_k$ be the $k$-th slice of the matrix along the third mode. The tensor can then be
@@ -407,3 +434,39 @@ class Parafac2Tensor(EvolvingTensor):
             A list of factor matrices, the second element should be the blueprint matrix.
         projection_matrices : list[np.ndarray]
         """
+        self.rank = A.shape[1]
+        self._A = A
+        self._blueprint_B = blueprint_B
+        self._C = C
+        self._projection_matrices = tuple(projection_matrices)
+        self.B = ProjectedFactor(blueprint_B, self._projection_matrices)
+
+
+        self.all_same_size = all_same_size
+        self.warning = warning
+
+
+    @property
+    def A(self):
+        return self._A
+        
+    @property
+    def C(self):
+        return self._C
+    
+    @property
+    def blueprint_B(self):
+        return self._blueprint_B
+                
+    @property
+    def D(self):
+        return np.array([np.diag(C[:, r]) for r in range(self.rank)])
+
+    def construct_slice(self, k):
+        """Construct the k-th slice along the third mode of the tensor.
+        """
+
+        loadings = A
+        scores = self.C * self.B[k]
+
+        return loadings @ scores
