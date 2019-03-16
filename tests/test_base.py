@@ -58,4 +58,115 @@ class TestKruskalTensor:
                 for k, element in enumerate(vector):
                     assert abs(element - np.sum(A[i, :]*B[j, :]*C[k, :])) < 1e-8
     
+
+class TestEvolvingTensor:
+    @pytest.fixture
+    def uniform_evolving_tensor(self):
+        A = np.random.randn(30, 5)
+        B = [np.random.randn(40, 5) for _ in range(50)]
+        C = np.random.randn(50, 5)
+
+        return base.EvolvingTensor(A, B, C)
     
+    @pytest.fixture
+    def nonuniform_evolving_tensor(self):
+        A = np.random.randn(30, 5)
+        B = [np.random.randn(np.random.randint(30, 50), 5) for _ in range(50)]
+        C = np.random.randn(50, 5)
+        
+        return base.EvolvingTensor(A, B, C, warning=False)
+    
+
+    def test_correct_size_of_uniform_tensor(self, uniform_evolving_tensor):
+        shape = (
+            uniform_evolving_tensor.A.shape[0],
+            uniform_evolving_tensor.B[0].shape[0],
+            uniform_evolving_tensor.C.shape[0]
+        )
+        assert uniform_evolving_tensor.construct_tensor().shape == shape
+    
+    def test_correct_size_of_nonuniform_tensor(self, nonuniform_evolving_tensor):
+        shape = (
+            nonuniform_evolving_tensor.A.shape[0],
+            max(m.shape[0] for m in nonuniform_evolving_tensor.B),
+            nonuniform_evolving_tensor.C.shape[0]
+        )
+
+        assert nonuniform_evolving_tensor.construct_tensor().shape == shape
+
+    def test_uniform_tensor_is_constructed_correctly(self, uniform_evolving_tensor):
+        A = uniform_evolving_tensor.A
+        B = uniform_evolving_tensor.B
+        C = uniform_evolving_tensor.C
+
+        tensor = uniform_evolving_tensor.construct_tensor()
+
+
+        for i, a_i in enumerate(A):
+            for k, c_k in enumerate(C):
+                for j, b_kj in enumerate(B[k]):
+                    assert abs(tensor[i, j, k] - np.sum(a_i*b_kj*c_k)) < 1e-8
+
+    def test_nonuniform_tensor_is_constructed_correctly(self, nonuniform_evolving_tensor):
+        A = nonuniform_evolving_tensor.A
+        B = nonuniform_evolving_tensor.B
+        C = nonuniform_evolving_tensor.C
+
+        tensor = nonuniform_evolving_tensor.construct_tensor()
+
+        for i, a_i in enumerate(A):
+            for k, c_k in enumerate(C):
+                for j, b_kj in enumerate(B[k]):
+                    assert abs(tensor[i, j, k] - np.sum(a_i*b_kj*c_k)) < 1e-8
+
+    def test_uniform_tensor_slices_equals_constructed_tensor(self, uniform_evolving_tensor):
+        tensor = uniform_evolving_tensor.construct_tensor()
+        for k, slice_ in enumerate(uniform_evolving_tensor.construct_slices()):
+            assert np.allclose(tensor[:, :, k], slice_)
+
+    def test_nonuniform_tensor_slices_equals_constructed_tensor(self, nonuniform_evolving_tensor):
+        tensor = nonuniform_evolving_tensor.construct_tensor()
+        for k, slice_ in enumerate(nonuniform_evolving_tensor.construct_slices()):
+            assert np.allclose(tensor[:, :slice_.shape[1], k], slice_)
+
+    def test_nonuniform_tensor_is_padded_with_zeros(self, nonuniform_evolving_tensor):
+        tensor = nonuniform_evolving_tensor.construct_tensor()
+        for k, slice_ in enumerate(nonuniform_evolving_tensor.construct_slices()):
+            assert np.allclose(tensor[:, slice_.shape[1]:, k], 0)
+    
+    def test_nonuniform_slices_has_correct_size(self, nonuniform_evolving_tensor):
+        m = nonuniform_evolving_tensor.A.shape[0]
+        B = nonuniform_evolving_tensor.B
+
+        for Bk, slice_ in zip(B, nonuniform_evolving_tensor.construct_slices()):
+            n = Bk.shape[0]
+
+            assert slice_.shape == (m, n)
+
+
+class TestParafac2Tensor(TestEvolvingTensor):
+    @pytest.fixture
+    def uniform_evolving_tensor(self):
+        A = np.random.randn(30, 5)
+        B_blueprint = np.identity(5)*0.2 + 0.8
+        projection_matrices = [np.linalg.qr(np.random.randn(40, 5))[0] for _ in range(50)]
+        C = np.random.randn(50, 5)
+
+        return base.Parafac2Tensor(A, B_blueprint, C, projection_matrices)
+    
+    @pytest.fixture
+    def nonuniform_evolving_tensor(self):
+        A = np.random.randn(30, 5)
+        J_ks = [np.random.randint(30, 50) for _ in range(50)]
+        projection_matrices = [np.linalg.qr(np.random.randn(J, 5))[0] for J in J_ks]
+        B_blueprint = np.identity(5)*0.2 + 0.8
+        C = np.random.randn(50, 5)
+        
+        return base.Parafac2Tensor(A, B_blueprint, C, projection_matrices, warning=False)
+    
+    def test_parafac2_constant_phi(self, uniform_evolving_tensor):
+        Bk = uniform_evolving_tensor.B[0]
+        phi = Bk.T@Bk
+        for Bk in uniform_evolving_tensor.B:
+            newphi = Bk.T@Bk
+            assert np.allclose(phi, newphi)
