@@ -285,7 +285,7 @@ class KruskalTensor(BaseDecomposedTensor):
             weights *= norms
         
         if update_weights:
-            self.weights = weights
+            self.weights[...] = weights
         
         return self
 
@@ -313,6 +313,8 @@ class KruskalTensor(BaseDecomposedTensor):
         return cls(factor_matrices).normalize_components(update_weights=False)
 
 
+
+
 class EvolvingTensor(BaseDecomposedTensor):
     def __init__(self, A, B, C, all_same_size=True, warning=True):
         """A tensor whose second mode evolves over the third mode.
@@ -336,9 +338,7 @@ class EvolvingTensor(BaseDecomposedTensor):
         self._C = C
 
         self.warning = warning
-
         self.all_same_size = all_same_size
-
         self.slice_shapes = [(self.A.shape[0], B_k.shape[0]) for B_k in self.B]
 
     @property
@@ -394,7 +394,6 @@ class EvolvingTensor(BaseDecomposedTensor):
         for k, _ in enumerate(self.slice_shapes):
             slice_ = self.construct_slice(k)
             constructed[:, :slice_.shape[1], k] = slice_
-        
         
 class ProjectedFactor:
     def __init__(self, factor, projection_matrices):
@@ -466,7 +465,34 @@ class Parafac2Tensor(EvolvingTensor):
         """Construct the k-th slice along the third mode of the tensor.
         """
 
-        loadings = A
+        loadings = self.A
         scores = self.C * self.B[k]
 
         return loadings @ scores
+
+
+    @classmethod
+    def random_init(cls, sizes, rank, random_method='normal'):
+
+        # TODO: Check if we should use rand or randn
+
+        if isinstance(sizes[1], int):
+            all_same_size = True
+            sizes = copy(sizes)
+            sizes[1] = [sizes[1]]*sizes[2]
+        else:
+            all_same_size = False
+            
+
+        A = np.random.rand(sizes[0], rank)
+        blueprint_B = np.identity(rank)
+        C = np.random.rand(sizes[2], rank)
+
+        projection_matrices = []
+
+        for second_mode_size in sizes[1]:
+            q, r = np.linalg.qr(np.random.randn(second_mode_size, rank), mode='complete')
+            projection_matrices.append(q[:rank])
+
+        
+        return cls(A, blueprint_B, C, projection_matrices, all_same_size))
