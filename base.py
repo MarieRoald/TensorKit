@@ -1,5 +1,4 @@
 import numpy as np
-from copy import copy
 from abc import ABC, abstractmethod
 try:
     from numba import jit, prange
@@ -282,7 +281,7 @@ class KruskalTensor(BaseDecomposedTensor):
         weights = np.ones(self.rank)
         for i, factor_matrix in enumerate(self.factor_matrices):
             norms = np.linalg.norm(factor_matrix, axis=0)
-            self.factor_matrices[i] = factor_matrix/norms[np.newaxis]
+            self.factor_matrices[i][...] = factor_matrix/norms[np.newaxis]
             weights *= norms
         
         if update_weights:
@@ -463,6 +462,10 @@ class Parafac2Tensor(EvolvingTensor):
     @property
     def blueprint_B(self):
         return self._blueprint_B
+
+    @property
+    def projection_matrices(self):
+        return self._projection_matrices
                 
     @property
     def D(self):
@@ -475,7 +478,7 @@ class Parafac2Tensor(EvolvingTensor):
 
         if isinstance(sizes[1], int):
             all_same_size = True
-            sizes = copy(sizes)
+            sizes = list(sizes)
             sizes[1] = [sizes[1]]*sizes[2]
         else:
             all_same_size = False
@@ -489,7 +492,7 @@ class Parafac2Tensor(EvolvingTensor):
 
         for second_mode_size in sizes[1]:
             q, r = np.linalg.qr(np.random.randn(second_mode_size, rank))
-            projection_matrices.append(q[:rank])
+            projection_matrices.append(q[:, :rank])
 
         
         return cls(A, blueprint_B, C, projection_matrices, all_same_size)

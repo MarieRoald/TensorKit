@@ -38,10 +38,10 @@ class BaseCP(BaseDecomposer):
         
         self.decomposition = base.KruskalTensor(factor_matrices)
  
-    def _check_valid_components(self, factor_matrices):
+    def _check_valid_components(self, decomposition):
         """Check if provided factor matrices have correct shape.
         """
-        for i, factor_matrix in enumerate(factor_matrices):
+        for i, factor_matrix in enumerate(decomposition.factor_matrices):
             len_, rank = factor_matrix.shape
             if rank != self.rank:
                 raise ValueError(
@@ -57,6 +57,9 @@ class BaseCP(BaseDecomposer):
     def init_components(self, initial_decomposition=None):
         """
         """
+        if initial_decomposition is not None and self.init.lower() != 'precomputed':
+            raise Warning(f'Precomputed components were passed even though {self.init} initialisation is used.'
+                           'The precomputed components will therefore be disregarded')
         if self.init.lower() == 'random':
             self.init_random()
         elif self.init.lower() == 'svd':
@@ -165,9 +168,9 @@ class CP_ALS(BaseCP):
 
         _rhs = base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode).T
         U, S, W = np.linalg.svd(V.T, full_matrices=False)
-        new_factor = (W.T @ np.diag(1/(S + 1e-5/n)) @ U.T @ _rhs).T #TODO er det denne måten vi vil gjøre det?
+        new_factor = (W.T @ np.diag(1/(S + 1e-5/n)) @ U.T @ _rhs).T  #TODO er det denne måten vi vil gjøre det?
 
-        self.factor_matrices[mode] = new_factor
+        self.factor_matrices[mode][...] = new_factor
 
     def _update_als_factor_non_negative(self, mode):
         """Solve non negative least squares problem to get factor for one mode."""
