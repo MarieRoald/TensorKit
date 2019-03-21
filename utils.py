@@ -1,6 +1,18 @@
 import numpy as np
-import base
-import cp
+from . import base
+from . import cp_old as cp
+
+
+
+
+def get_pca_loadings(Y, rank):
+    """Returns the pca loadings of the Y matrix.
+    """
+    U, S, Vh = np.linalg.svd(Y)
+    A = (Vh.T @ np.diag(S))[:, :rank]
+    return A
+
+
 
 
 def create_random_factors(sizes, rank):
