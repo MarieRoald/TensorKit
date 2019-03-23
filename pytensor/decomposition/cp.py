@@ -139,7 +139,9 @@ class BaseCP(BaseDecomposer):
 
 
 class CP_ALS(BaseCP):
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', print_frequency=1, non_negativity_constraints=None):
+    """CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares."""
+    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', print_frequency=1, 
+                 non_negativity_constraints=None):
         super().__init__(rank=rank, max_its=max_its, convergence_tol=convergence_tol, init=init)
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
@@ -189,7 +191,7 @@ class CP_ALS(BaseCP):
 
     def _update_als_factors(self):
         """Updates factors with alternating least squares."""
-        num_modes = len(self.X.shape) # TODO: skal denne lagres noe sted?
+        num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
             if self.non_negativity_constraints[mode]:
                 self._update_als_factor_non_negative(mode) 
@@ -201,6 +203,8 @@ class CP_ALS(BaseCP):
         self.prev_SSE = self.SSE 
 
     def _fit(self):
+        """Fit a CP model with Alternating Least Squares.
+        """
         # TODO: logger?
 
         if self.non_negativity_constraints is None:
