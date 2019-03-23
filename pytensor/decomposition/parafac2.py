@@ -11,8 +11,7 @@ class BaseParafac2(BaseDecomposer):
     TODO: Ikke tillat at evolve_mode og evolve_over settes manuelt
     TODO: Evolve_mode=2, evolve_over=0
     """
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None,
-                 evolve_mode=2, evolve_over=0):
+    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None):
         if loggers == None:
             loggers = []
 
@@ -22,15 +21,10 @@ class BaseParafac2(BaseDecomposer):
         self.init = init
         self.loggers = loggers
 
-        self.evolve_mode = evolve_mode
-        self.evolve_over = evolve_over
-        constant_mode = list({0, 1, 2} - {evolve_mode, evolve_over})
-        self.constant_mode = constant_mode[0]
-
     def set_target(self, X):
         if not isinstance(X, list):
             self.target_tensor = X
-            X = X.transpose(self.evolve_over, self.constant_mode, self.evolve_mode)
+            X = X.transpose(2, 0, 1)
         
         self.X = X
         self.X_shape = [len(X[0]), [Xk.shape[1] for Xk in X], len(X)]    # len(A), len(Bk), len(C)
@@ -63,16 +57,6 @@ class BaseParafac2(BaseDecomposer):
 
         self._update_projection_matrices()
 
-    @staticmethod
-    def generate_inverse_transpose(transpose):
-        transpose = list(transpose)
-        transpose[0], transpose[1] = transpose[1], transpose[0]
-        inverse_map = {t: i for i, t in enumerate(transpose)}
-
-        print(transpose)
-        print([inverse_map[i] for i in range(3)])
-        #return (1, 2, 0)
-
     def init_components(self, initial_decomposition=None):
         if self.init.lower() == 'svd':
             self.init_svd()
@@ -84,19 +68,6 @@ class BaseParafac2(BaseDecomposer):
         else:
             # TODO: better message
             raise ValueError('Init method must be either `random`, `svd` or `precomputed`')
-
-        
-        original_transpose = (self.evolve_over, self.constant_mode, self.evolve_mode)
-        print(original_transpose)
-        print(self.generate_inverse_transpose(original_transpose))
-        # 0 -> 2
-        # 1 -> 0
-        # 2 -> 1
-        
-        # 0 -> 1
-        # 1 -> 2
-        # 2 -> 0
-        self.decomposition.construction_transpose = self.generate_inverse_transpose(original_transpose)
 
     def _check_valid_components(self, decomposition):
         for i, factor_matrix, factor_name in zip([0, 2], [self.decomposition.A, self.decomposition.C], ['A', 'C']):
@@ -217,8 +188,6 @@ class Parafac2_ALS(BaseParafac2):
         convergence_tol=1e-10,
         init='random',
         loggers=None,
-        evolve_mode=0,
-        evolve_over=1,
         non_negativity_constraints=None,
         print_frequency=1
     ):
@@ -228,8 +197,6 @@ class Parafac2_ALS(BaseParafac2):
             convergence_tol=convergence_tol,
             init=init,
             loggers=loggers,
-            evolve_mode=evolve_mode,
-            evolve_over=evolve_over
         )
         self.non_negativity_constraints = non_negativity_constraints
         self.print_frequency = print_frequency
