@@ -82,12 +82,12 @@ def kron(*factors):
         product = kron_binary(product, factors[i])
     return product
 
+
 def kron_binary(A, B):
     n, m = A.shape
     p, q = B.shape
     kprod = A[:, np.newaxis, :, np.newaxis]*B[np.newaxis, :, np.newaxis, :]
     return kprod.reshape(n*p, m*q)
-
 
 
 def matrix_khatri_rao_product(X, factors, mode):
@@ -262,6 +262,7 @@ class BaseDecomposedTensor(ABC):
             raise Warning(f'The `type` attribute of the HDF5 group is not'
                           f' "{cls.__name__}, but "{group.attrs["type"]}"\n.'
                           'This might mean that you\'re loading the wrong tensor file')
+
 
 # TODO: Size should probably not be property for performance reasons? Should check this.
 class KruskalTensor(BaseDecomposedTensor):
