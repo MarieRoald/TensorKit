@@ -19,7 +19,7 @@ class BaseCP(BaseDecomposer):
         init='random',
         loggers=None,
         checkpoint_period=None,
-        checkpoint_name=None
+        checkpoint_path=None
     ):
         if loggers is None:
             loggers = []
@@ -32,7 +32,7 @@ class BaseCP(BaseDecomposer):
         self.init = init
         self.loggers = loggers
         self.checkpoint_period = checkpoint_period
-        self.checkpoint_name = checkpoint_name
+        self.checkpoint_path = checkpoint_path
 
     def init_random(self):
         """Random initialisation of the factor matrices.
@@ -176,7 +176,7 @@ class BaseCP(BaseDecomposer):
         return self.decomposition.weights
     
     def store_checkpoint(self):
-        with h5py.File(self.checkpoint_name, 'a') as h5:
+        with h5py.File(self.checkpoint_path, 'a') as h5:
             h5.attrs['final_iteration'] = self.current_iteration
             checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
             self.decomposition.store_in_hdf5_group(checkpoint_group)
@@ -195,7 +195,7 @@ class CP_ALS(BaseCP):
         init='random',
         loggers=None,
         checkpoint_period=None,
-        checkpoint_name=None,
+        checkpoint_path=None,
         print_frequency=1,
         non_negativity_constraints=None
     ):
@@ -206,7 +206,7 @@ class CP_ALS(BaseCP):
             init=init,
             loggers=loggers,
             checkpoint_period=checkpoint_period,
-            checkpoint_name=checkpoint_name
+            checkpoint_path=checkpoint_path
         )
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
