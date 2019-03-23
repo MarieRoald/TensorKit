@@ -1,29 +1,45 @@
 from abc import abstractmethod
+
+import h5py
 import numpy as np
+from scipy.optimize import nnls
+
 from .base_decomposer import BaseDecomposer
 from .. import base
 from ..utils import normalize_factors
 
-from scipy.optimize import nnls
-
 
 class BaseCP(BaseDecomposer):
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None):
+    DecompositionType = base.KruskalTensor
+    def __init__(
+        self,
+        rank,
+        max_its,
+        convergence_tol=1e-10,
+        init='random',
+        loggers=None,
+        checkpoint_period=None,
+        checkpoint_name=None
+    ):
         if loggers is None:
             loggers = []
+        if checkpoint_period is None:
+            checkpoint_period = -1
 
         self.rank = rank
         self.max_its = max_its
         self.convergence_tol = convergence_tol
         self.init = init
         self.loggers = loggers
+        self.checkpoint_period = checkpoint_period
+        self.checkpoint_name = checkpoint_name
 
     def init_random(self):
         """Random initialisation of the factor matrices.
 
         Each element of the factor matrices are taken from a standard normal distribution.
         """
-        self.decomposition = base.KruskalTensor.random_init(self.X.shape, rank=self.rank)
+        self.decomposition = self.DecompositionType.random_init(self.X.shape, rank=self.rank)
     
     def init_svd(self):
         """SVD initialisation of the factor matrices.
@@ -61,18 +77,33 @@ class BaseCP(BaseDecomposer):
     def init_components(self, initial_decomposition=None):
         """
         """
-        if initial_decomposition is not None and self.init.lower() != 'precomputed':
+        if (initial_decomposition is not None and 
+            self.init.lower() not in  ['precomputed', 'from_checkpoint']):
             raise Warning(f'Precomputed components were passed even though {self.init} initialisation is used.'
                            'The precomputed components will therefore be disregarded')
+
         if self.init.lower() == 'random':
             self.init_random()
+
         elif self.init.lower() == 'svd':
             self.init_svd()
+
+        elif self.init.lower() == 'from_checkpoint':
+            with h5py.File(initial_decomposition) as h5:
+                self.current_iteration = h5.attrs['final_iteration']
+                checkpoint_group = h5[f'checkpoint_{self.current_iteration:05d}']
+
+                initial_decomposition = self.DecompositionType.load_from_hdf5_group(checkpoint_group)
+
+            self._check_valid_components(initial_decomposition)
+            self.decomposition = initial_decomposition
+
         elif self.init.lower() == 'precomputed':
             self._check_valid_components(initial_decomposition)
             self.decomposition = initial_decomposition
+
         else:
-            raise ValueError('Init method must be either `random`, `svd` or `precomputed`.')
+            raise ValueError('Init method must be either `random`, `svd`, `from_checkpoint` or `precomputed`.')
 
     @abstractmethod
     def _fit(self):
@@ -80,6 +111,7 @@ class BaseCP(BaseDecomposer):
 
     def _init_fit(self, X, max_its, initial_decomposition):
         self.set_target(X)
+        self.current_iteration = 0
         self.init_components(initial_decomposition=initial_decomposition)
         if max_its is not None:
             self.max_its = max_its
@@ -95,11 +127,13 @@ class BaseCP(BaseDecomposer):
             Ignored, included to follow sklearn standards.
         max_its : int (optional)
             If set, then this will override the class's max_its.
-        initial_decomposition : tuple
-            A tuple parametrising a Kruskal tensor.
-            The first element is a list of factor matrices and the second element is an array containing the weights.
+        initial_decomposition : pytensor.base.KruskalTensor or str
+            The initial KruskalTensor (init=precomputed) to use or the path of the 
+            logfile to load (init=from_file).
         """
-        self._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
+        self._init_fit(
+            X=X, max_its=max_its, initial_decomposition=initial_decomposition
+        )
         self._fit()
 
     def fit_transform(self, X, y=None, *, max_its=None, initial_decomposition=None):
@@ -140,14 +174,39 @@ class BaseCP(BaseDecomposer):
     @property
     def weights(self):
         return self.decomposition.weights
+    
+    def store_checkpoint(self):
+        with h5py.File(self.checkpoint_name, 'a') as h5:
+            h5.attrs['final_iteration'] = self.current_iteration
+            checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
+            self.decomposition.store_in_hdf5_group(checkpoint_group)
+            for logger in self.loggers:
+                logger.write_to_hdf5_group(h5)
 
 
 class CP_ALS(BaseCP):
     """CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares."""
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None,
-                 print_frequency=1, non_negativity_constraints=None):
+
+    def __init__(
+        self,
+        rank,
+        max_its,
+        convergence_tol=1e-10,
+        init='random',
+        loggers=None,
+        checkpoint_period=None,
+        checkpoint_name=None,
+        print_frequency=1,
+        non_negativity_constraints=None
+    ):
         super().__init__(
-            rank=rank, max_its=max_its, convergence_tol=convergence_tol, init=init, loggers=loggers
+            rank=rank,
+            max_its=max_its,
+            convergence_tol=convergence_tol,
+            init=init,
+            loggers=loggers,
+            checkpoint_period=checkpoint_period,
+            checkpoint_name=checkpoint_name
         )
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
@@ -219,13 +278,17 @@ class CP_ALS(BaseCP):
         for it in range(self.max_its):
             if abs(self._rel_function_change) < self.convergence_tol:
                 break
-
             self._update_als_factors()
             self._update_convergence()
             for logger in self.loggers:
                 logger.log(self)
+            
+            if ((it+1) % self.checkpoint_period == 0) and (self.checkpoint_period > 0):
+                self.store_checkpoint()
 
             if it % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{it}: The MSE is {self.MSE:4f}, f is {self.loss():4f}, improvement is {self._rel_function_change:4g}')
+
+            self.current_iteration += 1
 
 

@@ -209,10 +209,10 @@ class BaseDecomposedTensor(ABC):
 
     def store(self, filename):
         with h5py.File(filename, 'w') as h5:
-            self._store_in_hdf5_group(h5)
+            self.store_in_hdf5_group(h5)
     
     @abstractmethod
-    def _store_in_hdf5_group(self, group):
+    def store_in_hdf5_group(self, group):
         pass
     
     def _prepare_hdf5_group(self, group):
@@ -221,10 +221,10 @@ class BaseDecomposedTensor(ABC):
     @classmethod
     def from_file(cls, filename):
         with h5py.File(filename) as h5:
-            return cls._load_from_hdf5_group(h5)
+            return cls.load_from_hdf5_group(h5)
     
     @abstractclassmethod
-    def _load_from_hdf5_group(cls, group):
+    def load_from_hdf5_group(cls, group):
         pass
     
     @classmethod
@@ -270,11 +270,9 @@ class KruskalTensor(BaseDecomposedTensor):
         return [fm.shape[0] for fm in self.factor_matrices]
     
     def construct_tensor(self):
-        if len(self.weights.shape) == 1:
-            self.weights = self.weights[np.newaxis, ...]
 
         shape = [f.shape[0] for f in self.factor_matrices]
-        tensor = (self.weights * self.factor_matrices[0]) @ khatri_rao(*self.factor_matrices[1:]).T
+        tensor = (self.weights[np.newaxis] * self.factor_matrices[0]) @ khatri_rao(*self.factor_matrices[1:]).T
 
         return fold(tensor, 0, shape=shape)
 
@@ -321,7 +319,7 @@ class KruskalTensor(BaseDecomposedTensor):
         
         return cls(factor_matrices).normalize_components(update_weights=False)
 
-    def _store_in_hdf5_group(self, group):
+    def store_in_hdf5_group(self, group):
         self._prepare_hdf5_group(group)
 
         group.attrs['n_factor_matrices'] = len(self.factor_matrices)
@@ -333,7 +331,7 @@ class KruskalTensor(BaseDecomposedTensor):
         group['weights'] = self.weights
         
     @classmethod
-    def _load_from_hdf5_group(cls, group):
+    def load_from_hdf5_group(cls, group):
         cls._check_hdf5_group(group)
 
         factor_matrices = [
@@ -429,7 +427,7 @@ class EvolvingTensor(BaseDecomposedTensor):
             constructed[:, :slice_.shape[1], k] = slice_
         return constructed
 
-    def _store_in_hdf5_group(self, group):
+    def store_in_hdf5_group(self, group):
         self._prepare_hdf5_group(group)
 
         group.attrs['rank'] = self.rank
@@ -443,7 +441,7 @@ class EvolvingTensor(BaseDecomposedTensor):
         group['C'] = self.C
         
     @classmethod
-    def _load_from_hdf5_group(cls, group):
+    def load_from_hdf5_group(cls, group):
         cls._check_hdf5_group(group)
 
         A = group['A'][...]
@@ -555,7 +553,7 @@ class Parafac2Tensor(EvolvingTensor):
         
         return cls(A, blueprint_B, C, projection_matrices, all_same_size)
 
-    def _store_in_hdf5_group(self, group):
+    def store_in_hdf5_group(self, group):
         self._prepare_hdf5_group(group)
 
         group.attrs['rank'] = self.rank
@@ -570,7 +568,7 @@ class Parafac2Tensor(EvolvingTensor):
             group[self.pm_template.format(i)] = pm
         
     @classmethod
-    def _load_from_hdf5_group(cls, group):
+    def load_from_hdf5_group(cls, group):
         cls._check_hdf5_group(group)
 
         A = group['A'][...]

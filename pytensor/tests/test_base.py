@@ -21,6 +21,7 @@ class TestKruskalTensor:
             loaded_tensor = base.KruskalTensor.from_file(filename)
         
         assert np.allclose(loaded_tensor.weights, random_3mode_ktensor.weights)
+        assert loaded_tensor.weights.shape == random_3mode_ktensor.weights.shape
 
         for fm, lfm in zip(random_3mode_ktensor.factor_matrices, loaded_tensor.factor_matrices):
             np.allclose(fm, lfm)
