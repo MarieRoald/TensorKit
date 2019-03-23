@@ -24,6 +24,13 @@ class BaseDecomposer(ABC):
         pass
     
     def set_target(self, X):
+        """Set target for fitting of model.
+
+        Arguments
+        ---------
+        X : np.ndarray
+            The tensor to fit the model to
+        """
         self.X = X
         self.X_norm = np.linalg.norm(X)
 
