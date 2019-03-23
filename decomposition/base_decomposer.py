@@ -72,9 +72,10 @@ class BaseDecomposer(ABC):
             Ignored, included to follow sklearn standards.
         max_its : int (optional)
             If set, then this will override the class's max_its.
-        initial_decomposition : tuple
-            A tuple parametrising a Kruskal tensor.
-            The first element is a list of factor matrices and the second element is an array containing the weights.
+        initial_decomposition : BaseDecomposedTensor (optional)
+            None (default) or a BaseDemposedTensor object containig the 
+            initial decomposition. Must be given if class's init is 'precomputed'.
+            If class's init is not 'precomputed' it is ignored.
         """
         self._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self._fit()

@@ -198,31 +198,6 @@ def flatten_factors(factors):
     return flattened
 
 
-def ktensor(*factors, weights=None):
-    """Creates a tensor from Kruskal factors, 
-    
-    Parameters
-    ----------
-    *factors : np.ndarray list
-        List of factor matrices. All factor matrices need to
-        have the same number of columns. 
-    weights: np.ndarray (Optional)
-        Vector array of shape (1, rank) that contains the weights 
-        for each component of the Kruskal composition.
-        If None, each factor matrix is assign a weight of one.
-    """
-    if weights is None:
-        weights = np.ones_like(factors[0])
-
-    if len(weights.shape) == 1:
-        weights = weights[np.newaxis, ...]
-
-    shape = [f.shape[0] for f in factors]
-    tensor = (weights * factors[0]) @ khatri_rao(*factors[1:]).T
-
-    return fold(tensor, 0, shape=shape)
-
-
 class BaseDecomposedTensor(ABC):
     @abstractmethod
     def __init__(self):
