@@ -62,7 +62,7 @@ class BaseDecomposer(ABC):
             self.max_its = max_its
 
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None):
-        """Fit a Tensor decomposition model. 
+        """Fit a tensor decomposition model. 
         
         Precomputed components must be specified if init method is 'precomputed'.
 
