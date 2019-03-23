@@ -1,5 +1,6 @@
 import numpy as np
-from abc import ABC, abstractmethod
+import h5py
+from abc import ABC, abstractmethod, abstractclassmethod
 try:
     from numba import jit, prange
 except ImportError:
@@ -231,9 +232,41 @@ class BaseDecomposedTensor(ABC):
     def construct_tensor(self):
         pass
 
+    def store(self, filename):
+        with h5py.File(filename, 'w') as h5:
+            self._store_in_hdf5_group(h5)
+    
+    @abstractmethod
+    def _store_in_hdf5_group(self, group):
+        pass
+    
+    def _prepare_hdf5_group(self, group):
+        group.attrs['type'] = type(self).__name__
+    
+    @classmethod
+    def from_file(cls, filename):
+        with h5py.File(filename) as h5:
+            return cls._load_from_hdf5_group(h5)
+    
+    @abstractclassmethod
+    def _load_from_hdf5_group(cls, group):
+        pass
+    
+    @classmethod
+    def _check_hdf5_group(cls, group):
+        tensortype = None
+        if 'type' in group.attrs:
+            tensortype = group.attrs['type']
+
+        if not group.attrs['type'] == cls.__name__:
+            raise Warning(f'The `type` attribute of the HDF5 group is not'
+                          f' "{cls.__name__}, but "{group.attrs["type"]}"\n.'
+                          'This might mean that you\'re loading the wrong tensor file')
 
 # TODO: Size should probably not be property for performance reasons? Should check this.
 class KruskalTensor(BaseDecomposedTensor):
+    fm_template = 'factor_matrix{:03d}'
+
     def __init__(self, factor_matrices, weights=None):
         self.rank = factor_matrices[0].shape[1]
 
@@ -312,10 +345,32 @@ class KruskalTensor(BaseDecomposedTensor):
         
         return cls(factor_matrices).normalize_components(update_weights=False)
 
+    def _store_in_hdf5_group(self, group):
+        self._prepare_hdf5_group(group)
 
+        group.attrs['n_factor_matrices'] = len(self.factor_matrices)
+        group.attrs['rank'] = self.rank
+
+        for i, factor_matrix in enumerate(self.factor_matrices):
+            group[self.fm_template.format(i)] = factor_matrix
+        
+        group['weights'] = self.weights
+        
+    @classmethod
+    def _load_from_hdf5_group(cls, group):
+        cls._check_hdf5_group(group)
+
+        factor_matrices = [
+            group[cls.fm_template.format(i)][...]
+                for i in range(group.attrs['n_factor_matrices'])
+        ]
+        weights = group['weights'][...]
+
+        return cls(factor_matrices, weights)
 
 
 class EvolvingTensor(BaseDecomposedTensor):
+    B_template = "B_{:03d}"
     def __init__(self, A, B, C, all_same_size=True, warning=True):
         """A tensor whose second mode evolves over the third mode.
 
@@ -397,6 +452,32 @@ class EvolvingTensor(BaseDecomposedTensor):
             slice_ = self.construct_slice(k)
             constructed[:, :slice_.shape[1], k] = slice_
         return constructed
+
+    def _store_in_hdf5_group(self, group):
+        self._prepare_hdf5_group(group)
+
+        group.attrs['rank'] = self.rank
+        group.attrs['all_same_size'] = self.all_same_size
+        group.attrs['warning'] = self.warning
+        group.attrs['num_Bs'] = len(self.B)
+
+        group['A'] = self.A
+        for k, Bk in enumerate(self.B):
+            group[self.B_template.format(k)] = Bk
+        group['C'] = self.C
+        
+    @classmethod
+    def _load_from_hdf5_group(cls, group):
+        cls._check_hdf5_group(group)
+
+        A = group['A'][...]
+        B = [group[cls.B_template.format(k)][...] for k in range(group.attrs['num_Bs'])]
+        C = group['C'][...]
+        warning = group.attrs['warning']
+        all_same_size = group.attrs['all_same_size']
+
+        return cls(A, B, C, all_same_size=all_same_size, warning=warning)
+        
         
 class ProjectedFactor:
     def __init__(self, factor, projection_matrices):
@@ -414,8 +495,9 @@ class ProjectedFactor:
 
 
 class Parafac2Tensor(EvolvingTensor):
+    pm_template = 'projection_matrix_{:03d}'
     def __init__(self, A, blueprint_B, C, projection_matrices, warning=True):
-        """A tensor whose second mode evolves over the third mode according to the PARAFAC2 constraints.
+        r"""A tensor whose second mode evolves over the third mode according to the PARAFAC2 constraints.
 
         Let $X_k$ be the $k$-th slice of the matrix along the third mode. The tensor can then be
         described in the following manner
@@ -496,3 +578,33 @@ class Parafac2Tensor(EvolvingTensor):
 
         
         return cls(A, blueprint_B, C, projection_matrices, all_same_size)
+
+    def _store_in_hdf5_group(self, group):
+        self._prepare_hdf5_group(group)
+
+        group.attrs['rank'] = self.rank
+        group.attrs['all_same_size'] = self.all_same_size
+        group.attrs['warning'] = self.warning
+        group.attrs['n_projection_matrices'] = len(self.projection_matrices)
+
+        group['A'] = self.A
+        group['blueprint_B'] = self.blueprint_B
+        group['C'] = self.C
+        for i, pm in enumerate(self.projection_matrices):
+            group[self.pm_template.format(i)] = pm
+        
+    @classmethod
+    def _load_from_hdf5_group(cls, group):
+        cls._check_hdf5_group(group)
+
+        A = group['A'][...]
+        blueprint_B = group['blueprint_B'][...]
+        C = group['C'][...]
+        warning = group.attrs['warning']
+
+        projection_matrices = [
+            group[cls.pm_template.format(i)][...]
+                for i in range(group.attrs['n_projection_matrices'])
+        ]
+
+        return cls(A, blueprint_B, C, projection_matrices, warning=warning)

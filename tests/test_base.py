@@ -1,3 +1,4 @@
+import tempfile
 import pytest
 import numpy as np
 from .. import base
@@ -11,6 +12,18 @@ class TestKruskalTensor:
         C = np.random.randn(50, 3)
 
         return base.KruskalTensor([A, B, C])
+    
+    def test_load_tensor_loads_stored_tensor(self, random_3mode_ktensor):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = f'{tmpdir}/storedfactors.h5'
+            random_3mode_ktensor.store(filename)
+            
+            loaded_tensor = base.KruskalTensor.from_file(filename)
+        
+        assert np.allclose(loaded_tensor.weights, random_3mode_ktensor.weights)
+
+        for fm, lfm in zip(random_3mode_ktensor.factor_matrices, loaded_tensor.factor_matrices):
+            np.allclose(fm, lfm)
 
     def test_all_factor_matrices_must_have_same_size(self):
         A = np.random.randn(30, 5)
@@ -76,6 +89,31 @@ class TestEvolvingTensor:
         
         return base.EvolvingTensor(A, B, C, warning=False)
     
+    def test_load_uniform_tensor_loads_stored_tensor(self, uniform_evolving_tensor):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = f'{tmpdir}/storedfactors.h5'
+            uniform_evolving_tensor.store(filename)
+            
+            loaded_tensor = base.EvolvingTensor.from_file(filename)
+        
+        assert np.allclose(loaded_tensor.A, uniform_evolving_tensor.A)
+        assert np.allclose(loaded_tensor.C, uniform_evolving_tensor.C)
+
+        for Bk, lBk in zip(uniform_evolving_tensor.B, loaded_tensor.B):
+            np.allclose(Bk, lBk)
+    
+    def test_load_nonuniform_tensor_loads_stored_tensor(self, nonuniform_evolving_tensor):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = f'{tmpdir}/storedfactors.h5'
+            nonuniform_evolving_tensor.store(filename)
+            
+            loaded_tensor = base.EvolvingTensor.from_file(filename)
+        
+        assert np.allclose(loaded_tensor.A, nonuniform_evolving_tensor.A)
+        assert np.allclose(loaded_tensor.C, nonuniform_evolving_tensor.C)
+
+        for Bk, lBk in zip(nonuniform_evolving_tensor.B, loaded_tensor.B):
+            np.allclose(Bk, lBk)
 
     def test_correct_size_of_uniform_tensor(self, uniform_evolving_tensor):
         shape = (
@@ -170,3 +208,31 @@ class TestParafac2Tensor(TestEvolvingTensor):
         for Bk in uniform_evolving_tensor.B:
             newphi = Bk.T@Bk
             assert np.allclose(phi, newphi)
+    
+    def test_load_uniform_tensor_loads_stored_tensor(self, uniform_evolving_tensor):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = f'{tmpdir}/storedfactors.h5'
+            uniform_evolving_tensor.store(filename)
+            
+            loaded_tensor = base.Parafac2Tensor.from_file(filename)
+        
+        assert np.allclose(loaded_tensor.A, uniform_evolving_tensor.A)
+        assert np.allclose(loaded_tensor.C, uniform_evolving_tensor.C)
+        assert np.allclose(loaded_tensor.blueprint_B, uniform_evolving_tensor.blueprint_B)
+
+        for Pk, lPk in zip(uniform_evolving_tensor.projection_matrices, loaded_tensor.projection_matrices):
+            np.allclose(Pk, lPk)
+    
+    def test_load_nonuniform_tensor_loads_stored_tensor(self, nonuniform_evolving_tensor):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = f'{tmpdir}/storedfactors.h5'
+            nonuniform_evolving_tensor.store(filename)
+            
+            loaded_tensor = base.Parafac2Tensor.from_file(filename)
+        
+        assert np.allclose(loaded_tensor.A, nonuniform_evolving_tensor.A)
+        assert np.allclose(loaded_tensor.C, nonuniform_evolving_tensor.C)
+        assert np.allclose(loaded_tensor.blueprint_B, nonuniform_evolving_tensor.blueprint_B)
+
+        for Pk, lPk in zip(nonuniform_evolving_tensor.projection_matrices, loaded_tensor.projection_matrices):
+            np.allclose(Pk, lPk)
