@@ -27,26 +27,26 @@ class BaseLogger(ABC):
         return self.log_iterations[self.prev_checkpoint_it:]
 
 
-    def _write_log_to_hd5_group(self, logger_group, logname, log):
+    def _write_log_to_hd5_group(self, logname, logger_group, log):
         """Writes list of log values to HDF5 group.
         
         Arguments
         ---------
-        logger_group: h5.Group
-            Group to write the log to.
         logname: string
             Name of log. Used as name for a HDF5 dataset.
+        logger_group: h5.Group
+            Group to write the log to.
         log: list(int)
             List containing the log values.
         """
         if logname in logger_group:
             old_length = logger_group[logname].shape[0]
             new_length = old_length + len(log) 
-            logger_group[logname].reshape(new_length, axis=0)
+            logger_group[logname].resize(new_length, axis=0)
             logger_group[logname][old_length:] = log
         else:
             logger_group.create_dataset(logname, shape=(len(log),), maxshape=(None,))
-            logger_group[logname] = log
+            logger_group[logname][...] = log
 
         self.prev_checkpoint_it += len(log)
 
