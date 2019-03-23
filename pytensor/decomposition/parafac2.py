@@ -11,11 +11,17 @@ class BaseParafac2(BaseDecomposer):
     TODO: Ikke tillat at evolve_mode og evolve_over settes manuelt
     TODO: Evolve_mode=2, evolve_over=0
     """
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random',  evolve_mode=2, evolve_over=0):
+    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None,
+                 evolve_mode=2, evolve_over=0):
+        if loggers == None:
+            loggers = []
+
         self.rank = rank
         self.max_its = max_its
         self.convergence_tol = convergence_tol
         self.init = init
+        self.loggers = loggers
+
         self.evolve_mode = evolve_mode
         self.evolve_over = evolve_over
         constant_mode = list({0, 1, 2} - {evolve_mode, evolve_over})
@@ -210,6 +216,7 @@ class Parafac2_ALS(BaseParafac2):
         max_its,
         convergence_tol=1e-10,
         init='random',
+        loggers=None,
         evolve_mode=0,
         evolve_over=1,
         non_negativity_constraints=None,
@@ -220,6 +227,7 @@ class Parafac2_ALS(BaseParafac2):
             max_its,
             convergence_tol=convergence_tol,
             init=init,
+            loggers=loggers,
             evolve_mode=evolve_mode,
             evolve_over=evolve_over
         )
@@ -251,6 +259,9 @@ class Parafac2_ALS(BaseParafac2):
 
             self._update_parafac2_factors()
             self._update_convergence()
+
+            for logger in self.loggers:
+                logger.log(self)
 
             if it% self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{it:6}: The MSE is {self.MSE: 4f}, f is {self.loss():4f}, '

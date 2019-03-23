@@ -8,11 +8,15 @@ from scipy.optimize import nnls
 
 
 class BaseCP(BaseDecomposer):
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random'):
+    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None):
+        if loggers is None:
+            loggers = []
+
         self.rank = rank
         self.max_its = max_its
         self.convergence_tol = convergence_tol
         self.init = init
+        self.loggers = loggers
 
     def init_random(self):
         """Random initialisation of the factor matrices.
@@ -140,9 +144,11 @@ class BaseCP(BaseDecomposer):
 
 class CP_ALS(BaseCP):
     """CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares."""
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', print_frequency=1, 
-                 non_negativity_constraints=None):
-        super().__init__(rank=rank, max_its=max_its, convergence_tol=convergence_tol, init=init)
+    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None,
+                 print_frequency=1, non_negativity_constraints=None):
+        super().__init__(
+            rank=rank, max_its=max_its, convergence_tol=convergence_tol, init=init, loggers=loggers
+        )
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
 
@@ -216,6 +222,8 @@ class CP_ALS(BaseCP):
 
             self._update_als_factors()
             self._update_convergence()
+            for logger in self.loggers:
+                logger.log(self)
 
             if it % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{it}: The MSE is {self.MSE:4f}, f is {self.loss():4f}, improvement is {self._rel_function_change:4g}')
