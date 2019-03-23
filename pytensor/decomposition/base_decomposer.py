@@ -34,16 +34,19 @@ class BaseDecomposer(ABC):
 
     @property
     def SSE(self):
+        """Sum Squared Error"""
         # TODO: Cache result
         return np.linalg.norm(self.X - self.reconstructed_X)**2
     
     @property
     def MSE(self):
+        """Mean Squared Error"""
         # TODO: Cache result
         return self.SSE/np.prod(self.X.shape)
     
     @property
     def RMSE(self):
+        """Root Mean Squared Error"""
         # TODO: Cache result
         return np.sqrt(self.MSE)
 
