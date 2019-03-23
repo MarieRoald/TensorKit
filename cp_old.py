@@ -2,9 +2,9 @@ import numpy as np
 from collections.abc import Iterable
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
-import base
-import utils
-from log import Logger
+from . import base
+from . import utils
+from .log import Logger
 
 from scipy import optimize
 from scipy.linalg import solve_triangular

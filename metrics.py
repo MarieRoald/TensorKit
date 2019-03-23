@@ -1,9 +1,9 @@
 import numpy as np
 import itertools
-import base
-import cp
+from . import base
+from . import cp_old as cp
 import scipy
-import utils
+from . import utils
 
 
 def weight_score(weight1, weight2):
@@ -55,11 +55,12 @@ def factor_match_score(
         raise ValueError('́`fms_reduction` must be either "min" or "mean".')
 
     rank = true_factors[0].shape[1]
+    estimated_rank = estimated_factors[0].shape[1]
 
     max_fms = -1
     best_permutation = None
 
-    for permutation in itertools.permutations(range(rank), r=rank):
+    for permutation in itertools.permutations(range(estimated_rank), r=rank):
         permuted_factors = utils.permute_factors(permutation, estimated_factors)
 
         fms = fms_reduction(
@@ -129,7 +130,7 @@ def core_consistency_parafac2(X, P_k, F, A, D_k, rank):
 def calculate_core_consistencies(X, upper_rank=5):
     core_consistencies = []
     for k in range(1, upper_rank + 1):
-        factors, result, initial_factors, log = cp.cp_opt(
+        factors, result, initial_factors = cp.cp_opt(
             X, rank=k, method="cg", init="svd", gtol=1e-10
         )
         A, B, C = factors
