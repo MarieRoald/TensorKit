@@ -14,9 +14,9 @@ class TestCPALS:
         return pf2tensor
     
     def test_rank4_decomposition(self, rank4_parafac2_tensor):
-        X = rank4_parafac2_tensor.construct_tensor()
+        X = (rank4_parafac2_tensor.construct_tensor())
         parafac2_als = parafac2.Parafac2_ALS(4, max_its=10000, convergence_tol=1e-10, print_frequency=1000)
         estimated_pf2tensor = parafac2_als.fit_transform(X)
-        estimated_X = estimated_pf2tensor.construct_tensor()
+        estimated_X = estimated_pf2tensor.construct_tensor().transpose(1, 2, 0)
 
         assert np.allclose(X, estimated_X, rtol=1e-5, atol=1)

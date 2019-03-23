@@ -7,7 +7,11 @@ from .. import base
 
 
 class BaseParafac2(BaseDecomposer):
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random',  evolve_mode=0, evolve_over=1):
+    """
+    TODO: Ikke tillat at evolve_mode og evolve_over settes manuelt
+    TODO: Evolve_mode=2, evolve_over=0
+    """
+    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random',  evolve_mode=2, evolve_over=0):
         self.rank = rank
         self.max_its = max_its
         self.convergence_tol = convergence_tol
@@ -69,7 +73,7 @@ class BaseParafac2(BaseDecomposer):
         elif self.init.lower() == 'random':
             self.init_random()
         elif self.init.lower() == 'precomputed':
-            self._check_valid_componenst(initial_decomposition)
+            self._check_valid_components(initial_decomposition)
             self.decomposition = initial_decomposition
         else:
             # TODO: better message
@@ -88,7 +92,7 @@ class BaseParafac2(BaseDecomposer):
         # 2 -> 0
         self.decomposition.construction_transpose = self.generate_inverse_transpose(original_transpose)
 
-    def _check_valid_componenst(self, decomposition):
+    def _check_valid_components(self, decomposition):
         for i, factor_matrix, factor_name in zip([0, 2], [self.decomposition.A, self.decomposition.C], ['A', 'C']):
             if factor_matrix.shape[0] != self.X_shape[i]:
                 raise ValueError(
