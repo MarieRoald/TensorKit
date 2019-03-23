@@ -5,7 +5,7 @@ import numpy as np
 
 class BaseLogger(ABC):
     def __init__(self):
-        self.log_values = []
+        self.log_metrics = []
         self.log_iterations = []
         self.prev_checkpoint_it = 0
 
@@ -14,12 +14,13 @@ class BaseLogger(ABC):
         pass
 
     def log(self, decomposer):
+        """Logs metric and iterations by appending them to lists."""
         self._log(decomposer)
         self.log_iterations.append(decomposer.current_iteration)
 
     @property
-    def latest_log_values(self):
-        return self.log_values[self.prev_checkpoint_it:]
+    def latest_log_metrics(self):
+        return self.log_metrics[self.prev_checkpoint_it:]
 
     @property
     def latest_log_iterations(self):
@@ -27,9 +28,20 @@ class BaseLogger(ABC):
 
 
     def _write_log_to_hd5_group(self, logger_group, logname, log):
+        """Writes list of log values to HDF5 group.
+        
+        Arguments
+        ---------
+        logger_group: h5.Group
+            Group to write the log to.
+        logname: string
+            Name of log. Used as name for a HDF5 dataset.
+        log: list(int)
+            List containing the log values.
+        """
         if logname in logger_group:
             old_length = logger_group[logname].shape[0]
-            new_length = old_length + len(log)  # Noe rart skjer her tror jeg
+            new_length = old_length + len(log) 
             logger_group[logname].reshape(new_length, axis=0)
             logger_group[logname][old_length:] = log
         else:
@@ -37,36 +49,32 @@ class BaseLogger(ABC):
             logger_group[logname] = log
 
         self.prev_checkpoint_it += len(log)
-    
+
     def write_to_hdf5_group(self, h5group):
+        """Writes log metrics and log iterations to HDF5 group."""
         logger_group = h5group.require_group(type(self).__name__)
         self._write_log_to_hd5_group('iterations', logger_group, self.latest_log_iterations)
-        self._write_log_to_hd5_group('values', logger_group, self.latest_log_values)
+        self._write_log_to_hd5_group('values', logger_group, self.latest_log_metrics)
 
 
 class LossLogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_values.append(decomposer.loss)
+        self.log_metrics.append(decomposer.loss)
 
 class MSELogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_values.append(decomposer.MSE)
+        self.log_metrics.append(decomposer.MSE)
 
 class SSELogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_values.append(decomposer.SSE)
+        self.log_metrics.append(decomposer.SSE)
 
 class RMSELogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_values.append(decomposer.RMSE)
+        self.log_metrics.append(decomposer.RMSE)
 
 class ExplainedVarianceLogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_values.append(decomposer.explained_variance)
-
-class GradientLogger(BaseLogger):
-    def _log(self, decomposer):
-        self.log_values.append(decomposer.gradient)
-
+        self.log_metrics.append(decomposer.explained_variance)
 
     
