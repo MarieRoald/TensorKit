@@ -45,7 +45,7 @@ class BaseLogger(ABC):
             logger_group[logname].resize(new_length, axis=0)
             logger_group[logname][old_length:] = log
         else:
-            logger_group.create_dataset(logname, shape=(len(log),), maxshape=(None,))
+            logger_group.create_dataset(logname, shape=(len(log),), maxshape=(None,), dtype=log.dtype)
             logger_group[logname][...] = log
 
 
