@@ -287,7 +287,7 @@ class CP_ALS(BaseCP):
                 self.store_checkpoint()
 
             if it % self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'{it}: The MSE is {self.MSE:4f}, f is {self.loss():4f}, improvement is {self._rel_function_change:4g}')
+                print(f'{it}: The MSE is {self.MSE:4g}, f is {self.loss():4g}, improvement is {self._rel_function_change:4g}')
 
             self.current_iteration += 1
         
