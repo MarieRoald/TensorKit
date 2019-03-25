@@ -291,7 +291,7 @@ class CP_ALS(BaseCP):
 
             self.current_iteration += 1
         
-        if (it+1) % checkpoint_period != 0:
+        if (it+1) % self.checkpoint_period != 0:
             self.store_checkpoint()
 
 
