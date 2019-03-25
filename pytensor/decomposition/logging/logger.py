@@ -48,13 +48,13 @@ class BaseLogger(ABC):
             logger_group.create_dataset(logname, shape=(len(log),), maxshape=(None,))
             logger_group[logname][...] = log
 
-        self.prev_checkpoint_it += len(log)
 
     def write_to_hdf5_group(self, h5group):
         """Writes log metrics and log iterations to HDF5 group."""
         logger_group = h5group.require_group(type(self).__name__)
         self._write_log_to_hd5_group('iterations', logger_group, self.latest_log_iterations)
         self._write_log_to_hd5_group('values', logger_group, self.latest_log_metrics)
+        self.prev_checkpoint_it += len(self.latest_log_iterations)
 
 
 class LossLogger(BaseLogger):
