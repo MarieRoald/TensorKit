@@ -57,6 +57,8 @@ class BaseDecomposer(ABC):
         # TODO: Cache result
         return np.sqrt(self.MSE)
 
+    # TODO: Property?
+    # TODO: Hvis det blir property, fiks logger!
     @abstractmethod
     def loss(self):
         pass
