@@ -39,6 +39,7 @@ class BaseLogger(ABC):
         log: list(int)
             List containing the log values.
         """
+        log = np.array(log)
         if logname in logger_group:
             old_length = logger_group[logname].shape[0]
             new_length = old_length + len(log) 
