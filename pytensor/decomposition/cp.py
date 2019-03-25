@@ -290,5 +290,8 @@ class CP_ALS(BaseCP):
                 print(f'{it}: The MSE is {self.MSE:4f}, f is {self.loss():4f}, improvement is {self._rel_function_change:4g}')
 
             self.current_iteration += 1
+        
+        if (it+1) % checkpoint_period != 0:
+            self.store_checkpoint()
 
 
