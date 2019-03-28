@@ -293,5 +293,3 @@ class CP_ALS(BaseCP):
         
         if (it+1) % self.checkpoint_period != 0:
             self.store_checkpoint()
-
-

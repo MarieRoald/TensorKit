@@ -4,7 +4,7 @@ from .. import parafac2
 from ... import base
 from ... import metrics
 # Husk: Test at weights og factors endres inplace
-
+# TODO: test factor match score
 
 class TestCPALS:
     @pytest.fixture

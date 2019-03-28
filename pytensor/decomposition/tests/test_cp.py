@@ -34,16 +34,16 @@ class TestCPALS:
         checkpoint_period = 5
         X = rank4_kruskal_tensor.construct_tensor()
         with tempfile.TemporaryDirectory() as tempfolder:
-            checkpoint_name = f'{tempfolder}/checkpoint.h5'
+            checkpoint_path = f'{tempfolder}/checkpoint.h5'
             cp_als = cp.CP_ALS(
                 4, max_its=max_its, convergence_tol=1e-20, checkpoint_period=checkpoint_period,
-                checkpoint_name=checkpoint_name, print_frequency=-5
+                checkpoint_path=checkpoint_path, print_frequency=-5
             )
             decomposition = cp_als.fit_transform(X)
 
-            assert Path(checkpoint_name).is_file()
+            assert Path(checkpoint_path).is_file()
             
-            with h5py.File(checkpoint_name) as h5:
+            with h5py.File(checkpoint_path) as h5:
                 for i in range(max_its):
                     if (i+1) % checkpoint_period == 0:
                         assert f'checkpoint_{i:05d}' in h5
@@ -52,7 +52,7 @@ class TestCPALS:
             cp_als2 = cp.CP_ALS(
                 4, max_its=100, convergence_tol=1e-20, init='from_checkpoint'
             )
-            cp_als2._init_fit(X, 100, checkpoint_name)
+            cp_als2._init_fit(X, 100, checkpoint_path)
             for fm1, fm2 in zip(cp_als.decomposition.factor_matrices, cp_als2.decomposition.factor_matrices):
                 assert np.allclose(fm1, fm2)
             
