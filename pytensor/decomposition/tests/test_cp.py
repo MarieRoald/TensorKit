@@ -31,12 +31,12 @@ class TestCPALS:
     
     def test_store_and_load_from_checkpoint(self, rank4_kruskal_tensor):
         max_its = 20
-        checkpoint_period = 5
+        checkpoint_frequency = 5
         X = rank4_kruskal_tensor.construct_tensor()
         with tempfile.TemporaryDirectory() as tempfolder:
             checkpoint_path = f'{tempfolder}/checkpoint.h5'
             cp_als = cp.CP_ALS(
-                4, max_its=max_its, convergence_tol=1e-20, checkpoint_period=checkpoint_period,
+                4, max_its=max_its, convergence_tol=1e-20, checkpoint_frequency=checkpoint_frequency,
                 checkpoint_path=checkpoint_path, print_frequency=-5
             )
             decomposition = cp_als.fit_transform(X)
@@ -45,7 +45,7 @@ class TestCPALS:
             
             with h5py.File(checkpoint_path) as h5:
                 for i in range(max_its):
-                    if (i+1) % checkpoint_period == 0:
+                    if (i+1) % checkpoint_frequency == 0:
                         assert f'checkpoint_{i:05d}' in h5
 
 

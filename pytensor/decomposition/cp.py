@@ -18,21 +18,18 @@ class BaseCP(BaseDecomposer):
         convergence_tol=1e-10,
         init='random',
         loggers=None,
-        checkpoint_period=None,
+        checkpoint_frequency=None,
         checkpoint_path=None
     ):
-        if loggers is None:
-            loggers = []
-        if checkpoint_period is None:
-            checkpoint_period = -1
-
+        super().__init__(
+            loggers=loggers,
+            checkpoint_frequency=checkpoint_frequency,
+            checkpoint_path=checkpoint_path
+        )
         self.rank = rank
         self.max_its = max_its
         self.convergence_tol = convergence_tol
         self.init = init
-        self.loggers = loggers
-        self.checkpoint_period = checkpoint_period
-        self.checkpoint_path = checkpoint_path
 
     def init_random(self):
         """Random initialisation of the factor matrices.
@@ -89,14 +86,7 @@ class BaseCP(BaseDecomposer):
             self.init_svd()
 
         elif self.init.lower() == 'from_checkpoint':
-            with h5py.File(initial_decomposition) as h5:
-                self.current_iteration = h5.attrs['final_iteration']
-                checkpoint_group = h5[f'checkpoint_{self.current_iteration:05d}']
-
-                initial_decomposition = self.DecompositionType.load_from_hdf5_group(checkpoint_group)
-
-            self._check_valid_components(initial_decomposition)
-            self.decomposition = initial_decomposition
+            self.load_checkpoint(initial_decomposition)
 
         elif self.init.lower() == 'precomputed':
             self._check_valid_components(initial_decomposition)
@@ -174,14 +164,6 @@ class BaseCP(BaseDecomposer):
     @property
     def weights(self):
         return self.decomposition.weights
-    
-    def store_checkpoint(self):
-        with h5py.File(self.checkpoint_path, 'a') as h5:
-            h5.attrs['final_iteration'] = self.current_iteration
-            checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
-            self.decomposition.store_in_hdf5_group(checkpoint_group)
-            for logger in self.loggers:
-                logger.write_to_hdf5_group(h5)
 
 
 class CP_ALS(BaseCP):
@@ -194,7 +176,7 @@ class CP_ALS(BaseCP):
         convergence_tol=1e-10,
         init='random',
         loggers=None,
-        checkpoint_period=None,
+        checkpoint_frequency=None,
         checkpoint_path=None,
         print_frequency=1,
         non_negativity_constraints=None
@@ -205,7 +187,7 @@ class CP_ALS(BaseCP):
             convergence_tol=convergence_tol,
             init=init,
             loggers=loggers,
-            checkpoint_period=checkpoint_period,
+            checkpoint_frequency=checkpoint_frequency,
             checkpoint_path=checkpoint_path
         )
         self.print_frequency = print_frequency
@@ -283,7 +265,7 @@ class CP_ALS(BaseCP):
             for logger in self.loggers:
                 logger.log(self)
             
-            if ((it+1) % self.checkpoint_period == 0) and (self.checkpoint_period > 0):
+            if ((it+1) % self.checkpoint_frequency == 0) and (self.checkpoint_frequency > 0):
                 self.store_checkpoint()
 
             if it % self.print_frequency == 0 and self.print_frequency > 0:
@@ -291,5 +273,5 @@ class CP_ALS(BaseCP):
 
             self.current_iteration += 1
         
-        if (it+1) % self.checkpoint_period != 0:
+        if (it+1) % self.checkpoint_frequency != 0:
             self.store_checkpoint()
