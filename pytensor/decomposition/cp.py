@@ -99,13 +99,6 @@ class BaseCP(BaseDecomposer):
     def _fit(self):
         pass
 
-    def _init_fit(self, X, max_its, initial_decomposition):
-        self.set_target(X)
-        self.current_iteration = 0
-        self.init_components(initial_decomposition=initial_decomposition)
-        if max_its is not None:
-            self.max_its = max_its
-
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
 
@@ -262,16 +255,10 @@ class CP_ALS(BaseCP):
                 break
             self._update_als_factors()
             self._update_convergence()
-            for logger in self.loggers:
-                logger.log(self)
-            
-            if ((it+1) % self.checkpoint_frequency == 0) and (self.checkpoint_frequency > 0):
-                self.store_checkpoint()
-
             if it % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{it}: The MSE is {self.MSE:4g}, f is {self.loss():4g}, improvement is {self._rel_function_change:4g}')
 
-            self.current_iteration += 1
+            self._after_fit_iteration()
         
         if (it+1) % self.checkpoint_frequency != 0:
             self.store_checkpoint()
