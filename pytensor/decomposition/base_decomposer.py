@@ -95,8 +95,9 @@ class BaseDecomposer(ABC):
             None (default) or a BaseDemposedTensor object containig the 
             initial decomposition. If class's init is not 'precomputed' it is ignored.
         """
-        self.init_components(initial_decomposition=initial_decomposition)
+        self.current_iteration = 0
         self.set_target(X)
+        self.init_components(initial_decomposition=initial_decomposition)
         if max_its is not None:
             self.max_its = max_its
 
@@ -134,7 +135,13 @@ class BaseDecomposer(ABC):
     
     def store_checkpoint(self):
         with h5py.File(self.checkpoint_path, 'a') as h5:
+            if 'checkpoint_its' not in h5.attrs:
+                h5.attrs['checkpoint_its'] = [self.current_iteration]
+            else:
+                h5.attrs['checkpoint_its'] = [*h5.attrs['checkpoint_its'], self.current_iteration]
+
             h5.attrs['final_iteration'] = self.current_iteration
+            h5.attrs['decomposition_type'] = type(self).__name__
             checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
             self.decomposition.store_in_hdf5_group(checkpoint_group)
             for logger in self.loggers:
@@ -149,6 +156,7 @@ class BaseDecomposer(ABC):
 
         If ``load_it=None``, then the latest checkpoint will be used.
         """
+        # TODO: classmethod, dump all params. Requires major refactoring.
         with h5py.File(checkpoint_path) as h5:
             if 'final_iteration' not in h5.attrs:
                 raise ValueError(f'There is no checkpoints in {checkpoint_path}')
@@ -166,3 +174,13 @@ class BaseDecomposer(ABC):
 
         self._check_valid_components(initial_decomposition)
         self.decomposition = initial_decomposition
+    
+    def _after_fit_iteration(self):
+        for logger in self.loggers:
+            logger.log(self)
+
+        it = self.current_iteration
+        if ((it+1) % self.checkpoint_frequency == 0) and (self.checkpoint_frequency > 0):
+            self.store_checkpoint()
+
+        self.current_iteration += 1
