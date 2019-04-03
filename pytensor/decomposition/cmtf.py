@@ -74,12 +74,12 @@ class CMTF_ALS(CP_ALS):
         self.mode_to_cm_idx = mode_to_cm_idx
     
     def _init_fit(self, X, coupled_matrices, coupling_modes, max_its, initial_decomposition):
-        
-
         self.set_coupled_matrices(coupled_matrices, coupling_modes)
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self._rel_function_change = np.inf
         self.prev_SSE = self.SSE
+        
+        self.decomposition.normalize_components()
 
 
     def fit(self, X, coupled_matrices, coupling_modes, y=None, *, max_its=None, initial_decomposition=None):
@@ -130,7 +130,102 @@ class CMTF_ALS(CP_ALS):
         """
         self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes,
                  y=y, max_its=max_its, initial_decomposition=initial_decomposition)
-        return self.decomposition, [[A,V, w] for A, V, w in zip(self.coupled_factor_matrices, self.uncoupled_factor_matrices, self.coupled_weights)]
+        return self.decomposition, [[A,V] for A, V in zip(self.coupled_factor_matrices, self.uncoupled_factor_matrices)]
+
+    def _update_als_factors_(self):
+        super()._update_als_factors()
+        self._update_uncoupled_matrix_factors()
+
+    def _get_als_lhs(self, mode):
+        if mode in self.mode_to_cm_idx:
+            khatri_rao_product= base.khatri_rao(*self.factor_matrices, skip=mode)
+            V = [self.uncoupled_factor_matrices[cm_idx] for cm_idx in self.mode_to_cm_idx[mode]][0]
+            return np.concatenate([khatri_rao_product, V], axis=0).T
+        else:
+            return self._compute_V(mode).T
+    
+    def _get_als_rhs(self, mode):
+        if mode in self.mode_to_cm_idx:
+            unfolded_X = base.unfold(self.X, mode)
+            coupled_Y = [self.coupled_matrices[cm_idx] for cm_idx in self.mode_to_cm_idx[mode]][0]
+
+            return np.concatenate([unfolded_X, coupled_Y], axis=1)
+        else:
+            return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
+
+    def _update_als_factor_(self, mode):
+        """Solve least squares problem to get factor for one mode."""
+        debug = True
+        if debug:
+            from textwrap import dedent
+            debugstring = dedent(f"""\
+            
+            
+            Beginning of _update_als_factor mode {mode}
+
+                iteration: {self.current_iteration}
+                V weigths: {self.coupled_weights}
+                weights: {self.weights}
+                loss: {self.loss()}
+                tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2}
+                Y loss {self.coupled_factor_matrices_SSE}
+            """)
+            _loss = self.loss()
+        _lhs = self._get_als_lhs(mode)
+        _rhs = self._get_als_rhs(mode)
+
+        new_factor = _rhs@np.linalg.pinv(_lhs)
+        
+        self.decomposition.normalize_components()
+
+        self.factor_matrices[mode][...] = new_factor
+
+        if debug:
+            debugstring += dedent(f"""\
+            end of update als factor (mode {mode})
+                loss: {self.loss()})
+                tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2})
+                Y loss: {self.coupled_factor_matrices_SSE}""")
+
+            if self.loss() > _loss:
+                print(debugstring)
+
+    def _update_uncoupled_matrix_factors(self):
+        for mode, cm_idx in self.mode_to_cm_idx.items():
+            debug = True
+            if debug:
+                from textwrap import dedent
+                debugstring = dedent(f"""\
+                
+                
+                Beginning of uncoupled mode {mode}
+
+                    iteration: {self.current_iteration}
+                    V weigths: {self.coupled_weights}
+                    weights: {self.weights}
+                    loss: {self.loss()}
+                    tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2}
+                    Y loss {self.coupled_factor_matrices_SSE}
+                """)
+                _loss = self.loss()
+            unfolded_X = base.unfold(self.X, mode)
+            khatri_rao_product= base.khatri_rao(*self.factor_matrices, skip=mode)
+            cm_idx = self.mode_to_cm_idx[mode][0]
+            
+            coupled_Y = [self.coupled_matrices[cm_idx] for cm_idx in self.mode_to_cm_idx[mode]][0].T
+            V = [self.uncoupled_factor_matrices[cm_idx] for cm_idx in self.mode_to_cm_idx[mode]][0].T
+
+            self.uncoupled_factor_matrices[cm_idx][...] = coupled_Y @ np.linalg.pinv(self.factor_matrices[mode]).T
+            if debug:
+                debugstring += dedent(f"""\
+                end of update als factor (mode {mode})
+                    loss: {self.loss()})
+                    tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2})
+                    Y loss: {self.coupled_factor_matrices_SSE}""")
+
+                if self.loss() > _loss:
+                    print(debugstring)
+
 
 
     def _update_als_factor(self, mode):
@@ -144,22 +239,24 @@ class CMTF_ALS(CP_ALS):
             print('factor weights:', w)
         """
 
-        debug = False
-        if debug: 
-            print(f"Beginning of _update_als_factor mode {mode}")
+        debug = True
+        if debug:
+            from textwrap import dedent
+            debugstring = dedent(f"""\
+            
+            
+            Beginning of _update_als_factor mode {mode}
 
-            print("V weigths", self.coupled_weights)
-            print("weights",self.weights)
-
+                iteration: {self.current_iteration}
+                V weigths: {self.coupled_weights}
+                weights: {self.weights}
+                loss: {self.loss()}
+                tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2}
+                Y loss {self.coupled_factor_matrices_SSE}
+            """)
+            _loss = self.loss()
         
 
-
-            print("loss", self.loss())
-            print("tensor loss",np.linalg.norm(self.X - self.reconstructed_X)**2 )
-            print("Y loss", self.coupled_factor_matrices_SSE)
-        
-
-        self.decomposition.normalize_components()
 
 
         unfolded_X = base.unfold(self.X, mode)
@@ -170,8 +267,8 @@ class CMTF_ALS(CP_ALS):
 
             cm_idx = self.mode_to_cm_idx[mode][0]
             
-            self.coupled_weights[cm_idx][...] = np.linalg.norm(self.uncoupled_factor_matrices[cm_idx], axis=0)
-            self.uncoupled_factor_matrices[cm_idx][...] = self.uncoupled_factor_matrices[cm_idx]/self.coupled_weights[cm_idx][np.newaxis]
+            #self.coupled_weights[cm_idx][...] = np.linalg.norm(self.uncoupled_factor_matrices[cm_idx], axis=0)
+            #self.uncoupled_factor_matrices[cm_idx][...] = self.uncoupled_factor_matrices[cm_idx]/self.coupled_weights[cm_idx][np.newaxis]
 
             # TODO: support multiple couplings for one mode
             coupled_Y = [self.coupled_matrices[cm_idx] for cm_idx in self.mode_to_cm_idx[mode]][0]
@@ -185,7 +282,9 @@ class CMTF_ALS(CP_ALS):
 
             self.factor_matrices[mode][...] = new_factor
 
-            self.decomposition.normalize_components()
+            self.factor_matrices[mode][...] = self.factor_matrices[mode][...]/np.linalg.norm(self.factor_matrices[mode], axis=0)
+
+
 
             #self.coupled_matrices[cm_idx][...] =  coupled_Y @ np.linalg.pinv(self.uncoupled_factor_matrices[mode]).T
             self.uncoupled_factor_matrices[cm_idx][...] = coupled_Y.T @ np.linalg.pinv(self.factor_matrices[mode]).T
@@ -202,18 +301,25 @@ class CMTF_ALS(CP_ALS):
             n = np.prod(V.shape)
 
             _rhs = base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode).T
-            U, S, W = np.linalg.svd(V.T, full_matrices=False)
-            new_factor = (W.T @ np.diag(1/(S + 1e-5/n)) @ U.T @ _rhs).T  #TODO er det denne måten vi vil gjøre det?
+            # U, S, W = np.linalg.svd(V.T, full_matrices=False)
+            # new_factor = (W.T @ np.diag(1/(S + 1e-5)) @ U.T @ _rhs).T  #TODO er det denne måten vi vil gjøre det?
+            new_factor = (np.linalg.pinv(V.T) @ _rhs).T
+            new_factor = _rhs.T@np.linalg.pinv(V)
 
             self.factor_matrices[mode][...] = new_factor
+            #self.decomposition.normalize_components()
 
         
         if debug:
-            print(f" end of update als factor (mode {mode})")
-            print("loss", self.loss())
-            print("tensor loss",np.linalg.norm(self.X - self.reconstructed_X)**2 )
-            print("Y loss", self.coupled_factor_matrices_SSE)
-            print()
+            debugstring += dedent(f"""\
+            end of update als factor (mode {mode})
+                loss: {self.loss()})
+                tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2})
+                Y loss: {self.coupled_factor_matrices_SSE}""")
+
+            if self.loss() > _loss:
+                print(debugstring)
+            
         
     
     def _init_coupled_matrices(self):
