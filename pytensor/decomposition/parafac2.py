@@ -11,15 +11,22 @@ class BaseParafac2(BaseDecomposer):
     TODO: Ikke tillat at evolve_mode og evolve_over settes manuelt
     TODO: Evolve_mode=2, evolve_over=0
     """
-    def __init__(self, rank, max_its, convergence_tol=1e-10, init='random', loggers=None):
-        if loggers == None:
-            loggers = []
+    DecompositionType = base.Parafac2Tensor
+    def __init__(self, 
+        rank, 
+        max_its, 
+        convergence_tol=1e-10, 
+        init='random',
+        loggers=None,
+        checkpoint_frequency=None,
+        checkpoint_path=None,
+    ):
+        super().__init__(loggers=loggers, checkpoint_frequency=checkpoint_frequency, checkpoint_path=checkpoint_path)
 
         self.rank = rank
         self.max_its = max_its
         self.convergence_tol = convergence_tol
         self.init = init
-        self.loggers = loggers
 
     def set_target(self, X):
         if not isinstance(X, list):
@@ -62,15 +69,17 @@ class BaseParafac2(BaseDecomposer):
             self.init_svd()
         elif self.init.lower() == 'random':
             self.init_random()
+        elif self.init.lower() == 'from_checkpoint':
+            self.load_checkpoint(initial_decomposition)
         elif self.init.lower() == 'precomputed':
             self._check_valid_components(initial_decomposition)
             self.decomposition = initial_decomposition
         else:
             # TODO: better message
-            raise ValueError('Init method must be either `random`, `svd` or `precomputed`')
+            raise ValueError('Init method must be either `random`, `svd`, `from_checkpoint` or `precomputed`.')
 
     def _check_valid_components(self, decomposition):
-        for i, factor_matrix, factor_name in zip([0, 2], [self.decomposition.A, self.decomposition.C], ['A', 'C']):
+        for i, factor_matrix, factor_name in zip([0, 2], [decomposition.A, decomposition.C], ['A', 'C']):
             if factor_matrix.shape[0] != self.X_shape[i]:
                 raise ValueError(
                     f"The length of factor matrix {factor_name} ({factor_matrix.shape[0]}"
@@ -81,7 +90,7 @@ class BaseParafac2(BaseDecomposer):
                     f"The number of columns of {factor_name} ({factor_matrix.shape[1]}) does not agree with the models rank ({self.rank})"
                 )
         
-        for k, (B, X_slice) in enumerate(zip(self.decomposition.B, self.X)):
+        for k, (B, X_slice) in enumerate(zip(decomposition.B, self.X)):
             if B.shape[0] != X_slice.shape[1]:
                 raise ValueError(
                     f"The number of rows of factor matrix B_{k} ({B.shape[0]}"
@@ -96,13 +105,6 @@ class BaseParafac2(BaseDecomposer):
     @abstractmethod
     def _fit(self):
         pass
-
-    def _init_fit(self, X, max_its, initial_decomposition):
-        self.set_target(X)
-
-        self.init_components(initial_decomposition=initial_decomposition)
-        if max_its is not None:
-            self.max_its = max_its
 
     def fit(self, X, y=None, max_its=None, initial_decomposition=None):
         """Fit a parafac2 model. Precomputed components must be specified if init method is 'precomputed'
@@ -188,6 +190,8 @@ class Parafac2_ALS(BaseParafac2):
         convergence_tol=1e-10,
         init='random',
         loggers=None,
+        checkpoint_frequency=None,
+        checkpoint_path=None,
         non_negativity_constraints=None,
         print_frequency=1
     ):
@@ -197,6 +201,8 @@ class Parafac2_ALS(BaseParafac2):
             convergence_tol=convergence_tol,
             init=init,
             loggers=loggers,
+            checkpoint_frequency=checkpoint_frequency,
+            checkpoint_path=checkpoint_path
         )
         self.non_negativity_constraints = non_negativity_constraints
         self.print_frequency = print_frequency
@@ -227,12 +233,11 @@ class Parafac2_ALS(BaseParafac2):
             self._update_parafac2_factors()
             self._update_convergence()
 
-            for logger in self.loggers:
-                logger.log(self)
-
             if it% self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{it:6}: The MSE is {self.MSE: 4f}, f is {self.loss():4f}, '
                       f'improvement is {self._rel_function_change}')
+
+            self._after_fit_iteration()
 
     def _update_convergence(self):
         SSE = self.SSE
