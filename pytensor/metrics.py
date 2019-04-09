@@ -80,6 +80,7 @@ def tensor_completion_score(X, X_hat, W):
 
 
 def core_consistency(X, A, B, C, normalized=False):
+    # TODO: generalise to more than three modes
     F = A.shape[1]
 
     # Create the superdiagonal tensor
