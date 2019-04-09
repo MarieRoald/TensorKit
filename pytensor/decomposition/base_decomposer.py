@@ -144,6 +144,7 @@ class BaseDecomposer(ABC):
             h5.attrs['decomposition_type'] = type(self).__name__
             checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
             self.decomposition.store_in_hdf5_group(checkpoint_group)
+
             for logger in self.loggers:
                 logger.write_to_hdf5_group(h5)
     
