@@ -37,6 +37,7 @@ class BaseCP(BaseDecomposer):
         Each element of the factor matrices are taken from a standard normal distribution.
         """
         self.decomposition = self.DecompositionType.random_init(self.X.shape, rank=self.rank)
+        
     
     def init_svd(self):
         """SVD initialisation of the factor matrices.
@@ -191,7 +192,7 @@ class CP_ALS(BaseCP):
         self._rel_function_change = np.inf
         self.prev_SSE = self.SSE
 
-    def _compute_V(self, skip_mode):
+    def _get_als_lhs(self, skip_mode):
         """Compute left hand side of least squares problem."""
 
         V = np.ones((self.rank, self.rank))
@@ -200,33 +201,26 @@ class CP_ALS(BaseCP):
                 continue
             V *= factor.T @ factor
         return V
+    
+    def _get_als_rhs(self, mode):
+        return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
+
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode."""
-        
-        self.decomposition.normalize_components()
-        V = self._compute_V(mode)
-        n = np.prod(V.shape)
+        lhs = self._get_als_lhs(mode)
+        rhs = self._get_als_rhs(mode)
 
-        _rhs = base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode).T
-        U, S, W = np.linalg.svd(V.T, full_matrices=False)
-        new_factor = (W.T @ np.diag(1/(S + 1e-5/n)) @ U.T @ _rhs).T  #TODO er det denne måten vi vil gjøre det?
 
+        new_factor = base.rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
 
     def _update_als_factor_non_negative(self, mode):
         """Solve non negative least squares problem to get factor for one mode."""
+        lhs = self._get_als_lhs(mode)
+        rhs = self._get_als_rhs(mode)
 
-        self.decomposition.normalize_components()
-        V = self._compute_V(mode)
-        _rhs = base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode).T
-
-        new_factor_tmp = np.zeros_like(self.factor_matrices[mode].T)
-        for j in range(_rhs.shape[1]):
-            new_factor_tmp[:,j],_ = nnls(V.T, _rhs[:,j]) 
-
-        new_factor = new_factor_tmp.T
-
+        new_factor = base.non_negative_rightsolve(lhs, rhs)
         self.factor_matrices[mode] = new_factor
 
     def _update_als_factors(self):
@@ -237,6 +231,7 @@ class CP_ALS(BaseCP):
                 self._update_als_factor_non_negative(mode) 
             else:
                 self._update_als_factor(mode)
+            self.decomposition.normalize_components()
     
     def _update_convergence(self):
         self._rel_function_change = (self.prev_SSE - self.SSE)/self.prev_SSE
@@ -262,3 +257,13 @@ class CP_ALS(BaseCP):
         
         if (it+1) % self.checkpoint_frequency != 0:
             self.store_checkpoint()
+
+    def init_random(self):
+        super().init_random()
+        if self.non_negativity_constraints is None:
+            return 
+        
+        for mode, non_negativity in enumerate(self.non_negativity_constraints):
+            fm = self.decomposition.factor_matrices[mode]
+            if non_negativity:
+                fm[...] = np.abs(fm)
