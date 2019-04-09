@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import nnls
 import h5py
 from abc import ABC, abstractmethod, abstractclassmethod
 try:
@@ -10,6 +11,28 @@ else:
     withjit = True
     make_fast = jit(nopython=True, nogil=True, fastmath=True, parallel=True)
     jsafe_range = prange
+
+
+def rightsolve(A, B):
+    """Solve the equation X*A = B wrt X.
+    """
+    U, S, Vh = np.linalg.svd(A, full_matrices=False)
+    S[S != 0] = 1/S[S != 0]
+
+    return B @ (Vh.T * S @ U.T)
+
+
+def non_negative_rightsolve(A, B):
+    """Solve the equation X*A = B wrt X under nonnegativity constraints.
+    """
+    if len(B.shape) == 1:
+        B = B[np.newaxis, B]
+
+    x = np.zeros((B.shape[0], A.shape[0]))
+    for i, b_i in enumerate(B):
+        x[i, :], _ = nnls(A.T, b_i) 
+
+    return x
 
 
 def kron_binary_vectors(u, v):
