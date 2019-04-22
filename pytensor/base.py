@@ -25,6 +25,7 @@ def rightsolve(A, B):
 def non_negative_rightsolve(A, B):
     """Solve the equation X*A = B wrt X under nonnegativity constraints.
     """
+    # Discussion tracking in Enron Email Using PARAFAC has non negative updates
     if len(B.shape) == 1:
         B = B[np.newaxis, B]
 
@@ -230,6 +231,10 @@ class BaseDecomposedTensor(ABC):
     def construct_tensor(self):
         pass
 
+    @abstractmethod
+    def __getitem__(self, item):
+        pass
+
     def store(self, filename):
         with h5py.File(filename, 'w') as h5:
             self.store_in_hdf5_group(h5)
@@ -364,6 +369,9 @@ class KruskalTensor(BaseDecomposedTensor):
         weights = group['weights'][...]
 
         return cls(factor_matrices, weights)
+    
+    def __getitem__(self, item):
+        return self.factor_matrices[item]
 
 
 class EvolvingTensor(BaseDecomposedTensor):
@@ -474,6 +482,16 @@ class EvolvingTensor(BaseDecomposedTensor):
         all_same_size = group.attrs['all_same_size']
 
         return cls(A, B, C, all_same_size=all_same_size, warning=warning)
+    
+    def __getitem__(self, item):
+        if item == 0:
+            return self.A
+        elif item == 1:
+            return self.B
+        elif item == 2:
+            return self.C
+        else:
+            raise IndexError
         
         
 class ProjectedFactor:

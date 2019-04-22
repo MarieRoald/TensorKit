@@ -33,7 +33,7 @@ class TestCMTFALS:
         A = rank4_kruskal_tensor.factor_matrices[0]
         Y = A @ V.T
 
-        cmtf_decomposer = cmtf.CMTF_ALS(4, max_its=2000, convergence_tol=1e-10, print_frequency=100)
+        cmtf_decomposer = cmtf.CMTF_ALS(4, max_its=2000, convergence_tol=0e-10, print_frequency=100)
 
         estimated_ktensor, estimated_Y_factors = cmtf_decomposer.fit_transform(X, [Y], [0])
         estimated_X = estimated_ktensor.construct_tensor()
