@@ -239,6 +239,12 @@ class Parafac2_ALS(BaseParafac2):
 
             self._after_fit_iteration()
 
+        if (
+            ((self.current_iteration+1) % self.checkpoint_frequency != 0) and 
+            (self.checkpoint_frequency > 0)
+        ):
+            self.store_checkpoint()
+
     def _update_convergence(self):
         SSE = self.SSE
         self._rel_function_change = (self.prev_SSE - SSE)/self.prev_SSE
