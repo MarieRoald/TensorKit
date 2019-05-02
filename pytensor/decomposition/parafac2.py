@@ -234,8 +234,8 @@ class Parafac2_ALS(BaseParafac2):
             self._update_convergence()
 
             if it% self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'{it:6}: The MSE is {self.MSE: 4f}, f is {self.loss():4f}, '
-                      f'improvement is {self._rel_function_change}')
+                print(f'{it:6}: The MSE is {self.MSE: 4g}, f is {self.loss():4g}, '
+                      f'improvement is {self._rel_function_change:g}')
 
             self._after_fit_iteration()
 
@@ -251,18 +251,20 @@ class Parafac2_ALS(BaseParafac2):
         self.prev_SSE = SSE
 
     def _update_parafac2_factors(self):
+        #print('Before projection update') 
+        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
         self._update_projection_matrices()
 
+        #print('Before ALS update') 
         #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
 
         # TODO: Hva gjør jeg med PX?
         self.cp_decomposer.set_target(self.projected_X)
         #self.cp_decomposer.set_target(ny_X)?
         self.cp_decomposer._update_als_factors()
-        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
-        self.cp_decomposition.normalize_components()
-        
         self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
+        self.cp_decomposition.weights = self.cp_decomposition.weights*0 + 1
+        #print('After iteration') 
         #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
         # from pdb import set_trace; set_trace()
 
