@@ -422,6 +422,10 @@ class EvolvingTensor(BaseDecomposedTensor):
         return self._C
     
     @property
+    def factor_matrices(self):
+        return [self.A, self.B, self.C]
+    
+    @property
     def shape(self):
         """The shape of the tensor created by the `construct_tensor` function.
         """
