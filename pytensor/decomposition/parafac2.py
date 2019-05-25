@@ -193,7 +193,7 @@ class Parafac2_ALS(BaseParafac2):
         checkpoint_frequency=None,
         checkpoint_path=None,
         non_negativity_constraints=None,
-        print_frequency=1
+        print_frequency=10
     ):
         super().__init__(
             rank,

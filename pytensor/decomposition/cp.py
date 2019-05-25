@@ -172,7 +172,7 @@ class CP_ALS(BaseCP):
         loggers=None,
         checkpoint_frequency=None,
         checkpoint_path=None,
-        print_frequency=1,
+        print_frequency=10,
         non_negativity_constraints=None
     ):
         super().__init__(
