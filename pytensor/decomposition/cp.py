@@ -194,7 +194,6 @@ class CP_ALS(BaseCP):
 
     def _get_als_lhs(self, skip_mode):
         """Compute left hand side of least squares problem."""
-
         V = np.ones((self.rank, self.rank))
         for i, factor in enumerate(self.factor_matrices):
             if i == skip_mode:
@@ -205,33 +204,27 @@ class CP_ALS(BaseCP):
     def _get_als_rhs(self, mode):
         return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
 
+    def _get_rightsolve(self, mode):
+        if self.non_negativity_constraints[mode]:
+            return base.non_negative_rightsolve
+        return base.rightsolve
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode."""
         lhs = self._get_als_lhs(mode)
         rhs = self._get_als_rhs(mode)
 
+        rightsolve = self._get_rightsolve(mode)
 
-        new_factor = base.rightsolve(lhs, rhs)
+        new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
-
-    def _update_als_factor_non_negative(self, mode):
-        """Solve non negative least squares problem to get factor for one mode."""
-        lhs = self._get_als_lhs(mode)
-        rhs = self._get_als_rhs(mode)
-
-        new_factor = base.non_negative_rightsolve(lhs, rhs)
-        self.factor_matrices[mode] = new_factor
+        self.decomposition.normalize_components()
 
     def _update_als_factors(self):
         """Updates factors with alternating least squares."""
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
-            if self.non_negativity_constraints[mode]:
-                self._update_als_factor_non_negative(mode) 
-            else:
-                self._update_als_factor(mode)
-            self.decomposition.normalize_components()
+            self._update_als_factor(mode)
     
     def _update_convergence(self):
         self._rel_function_change = (self.prev_SSE - self.SSE)/self.prev_SSE

@@ -304,7 +304,7 @@ class KruskalTensor(BaseDecomposedTensor):
 
         return fold(tensor, 0, shape=shape)
 
-    def normalize_components(self, update_weights=True):
+    def normalize_components(self, update_weights=True, eps=1e-15):
         """Set all factor matrices to unit length. Updates the weights if `update_weights` is True.
 
         Arguments:
@@ -316,7 +316,7 @@ class KruskalTensor(BaseDecomposedTensor):
         weights = np.ones(self.rank)
         for i, factor_matrix in enumerate(self.factor_matrices):
             norms = np.linalg.norm(factor_matrix, axis=0)
-            self.factor_matrices[i][...] = factor_matrix/norms[np.newaxis]
+            self.factor_matrices[i][...] = factor_matrix/(norms[np.newaxis] + eps)
             weights *= norms
         
         if update_weights:
@@ -573,7 +573,7 @@ class Parafac2Tensor(EvolvingTensor):
         return np.array([np.diag(self.C[:, r]) for r in range(self.rank)])
 
     @classmethod
-    def random_init(cls, sizes, rank):
+    def random_init(cls, sizes, rank, non_negativity=None):
 
         # TODO: Check if we should use rand or randn
 
@@ -583,11 +583,15 @@ class Parafac2Tensor(EvolvingTensor):
             sizes[1] = [sizes[1]]*sizes[2]
         else:
             all_same_size = False
+
+        if non_negativity == None:
+            non_negativity = [False, False, False]
             
 
+        
         A = np.random.rand(sizes[0], rank)
         blueprint_B = np.identity(rank)
-        C = np.random.rand(sizes[2], rank)
+        C = np.random.rand(sizes[2], rank) + 0.1
 
         projection_matrices = []
 
