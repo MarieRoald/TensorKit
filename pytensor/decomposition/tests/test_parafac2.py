@@ -1,15 +1,19 @@
-import pytest
 import tempfile
+import itertools
+from pathlib import Path
+
+import pytest
 import numpy as np
+import h5py
+
+from .test_utils import ensure_monotonicity
 from .. import parafac2
 from ... import base
 from ... import metrics
-from pathlib import Path
-import h5py
 # Husk: Test at weights og factors endres inplace
 # TODO: test factor match score
 
-class TestCPALS:
+class TestParafac2ALS:
     @pytest.fixture
     def rank4_parafac2_tensor(self):
         pf2tensor = base.Parafac2Tensor.random_init((30, 40, 50), rank=4)
@@ -18,28 +22,77 @@ class TestCPALS:
     
     def test_rank4_decomposition(self, rank4_parafac2_tensor):
         X = (rank4_parafac2_tensor.construct_tensor())
-        parafac2_als = parafac2.Parafac2_ALS(4, max_its=10000, convergence_tol=1e-10, print_frequency=1000)
+        parafac2_als = parafac2.Parafac2_ALS(4, max_its=1000, convergence_tol=1e-10, print_frequency=1000)
         estimated_pf2tensor = parafac2_als.fit_transform(X)
         estimated_X = estimated_pf2tensor.construct_tensor()
 
         assert np.allclose(X, estimated_X, rtol=1e-5, atol=1)
+
+    def test_rank4_non_negative_decomposition(self, rank4_parafac2_tensor):
+        X = (rank4_parafac2_tensor.construct_tensor())
+        parafac2_als = parafac2.Parafac2_ALS(4, non_negativity_constraints=[False, True, True], max_its=1000, convergence_tol=1e-10, print_frequency=1000)
+        for constraint in itertools.product([True, False], repeat=3):
+            parafac2_als.non_negativity_constraints = constraint
+            estimated_pf2tensor = parafac2_als.fit_transform(X)
+            estimated_X = estimated_pf2tensor.construct_tensor()
+
+            assert np.allclose(X, estimated_X, rtol=1e-5, atol=1)
+
+    def test_rank4_monotone_convergence_projections(self, rank4_parafac2_tensor):
+        X = (rank4_parafac2_tensor.construct_tensor())
+        parafac2_als = parafac2.Parafac2_ALS(4, max_its=100, convergence_tol=1e-10, print_frequency=1000)
+        parafac2_als._update_projection_matrices = ensure_monotonicity(
+            parafac2_als,
+            '_update_projection_matrices',
+            'SSE',
+            tol=1e-10
+        )
+        parafac2_als.fit_transform(X)
+ 
+    def test_rank4_monotone_convergence(self, rank4_parafac2_tensor):
+        X = (rank4_parafac2_tensor.construct_tensor())
+        parafac2_als = parafac2.Parafac2_ALS(4, max_its=100, convergence_tol=1e-10, print_frequency=1000)
+        parafac2_als._update_parafac2_factors = ensure_monotonicity(
+            parafac2_als,
+            '_update_parafac2_factors',
+            'SSE',
+            tol=1e-10
+        )
+        parafac2_als.fit_transform(X)
 
     def assert_correlation(self, M1, M2):
         assert metrics.factor_match_score([M1], [M2], weight_penalty=False)[0] > 1 - 1e-3
 
     def test_rank4_decomposition_correlation(self, rank4_parafac2_tensor):
         X = (rank4_parafac2_tensor.construct_tensor())
-        parafac2_als = parafac2.Parafac2_ALS(4, max_its=10000, convergence_tol=1e-10, print_frequency=1000)
+        parafac2_als = parafac2.Parafac2_ALS(4, max_its=1000, convergence_tol=1e-10, print_frequency=1000)
         estimated_pf2tensor = parafac2_als.fit_transform(X)
 
         self.assert_correlation(rank4_parafac2_tensor.A, estimated_pf2tensor.A)
-        self.assert_correlation(rank4_parafac2_tensor.C, estimated_pf2tensor.C)
         for P1, P2 in zip(rank4_parafac2_tensor.projection_matrices, estimated_pf2tensor.projection_matrices):
             Bk = P1@rank4_parafac2_tensor.blueprint_B
             estimated_Bk = P2@estimated_pf2tensor.blueprint_B
 
             self.assert_correlation(Bk, estimated_Bk)
 
+        self.assert_correlation(rank4_parafac2_tensor.C, estimated_pf2tensor.C)
+
+    def test_rank4_non_negative_decomposition_correlation(self, rank4_parafac2_tensor):
+        X = (rank4_parafac2_tensor.construct_tensor())
+        parafac2_als = parafac2.Parafac2_ALS(4,  non_negativity_constraints=[False, False, True], max_its=1000, convergence_tol=1e-10, print_frequency=1000)
+        
+        for constraint in itertools.product([True, False], repeat=3):
+            parafac2_als.non_negativity_constraints = constraint
+            estimated_pf2tensor = parafac2_als.fit_transform(X)
+
+            self.assert_correlation(rank4_parafac2_tensor.A, estimated_pf2tensor.A)
+            for P1, P2 in zip(rank4_parafac2_tensor.projection_matrices, estimated_pf2tensor.projection_matrices):
+                Bk = P1@rank4_parafac2_tensor.blueprint_B
+                estimated_Bk = P2@estimated_pf2tensor.blueprint_B
+
+                self.assert_correlation(Bk, estimated_Bk)
+
+            self.assert_correlation(rank4_parafac2_tensor.C, estimated_pf2tensor.C)
 
     def test_store_and_load_from_checkpoint(self, rank4_parafac2_tensor):
         max_its = 20

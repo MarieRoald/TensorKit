@@ -1,15 +1,17 @@
 from pathlib import Path
 import tempfile
+from functools import wraps
+import itertools
 
 import h5py
 import pytest
 import numpy as np
+from .test_utils import ensure_monotonicity
 from .. import cp
 from ... import base
 from ... import metrics
 # Husk: Test at weights og factors endres inplace
 
-np.random.seed(0)
 
 class TestCPALS:
     @pytest.fixture
@@ -40,7 +42,7 @@ class TestCPALS:
 
     def test_rank4_nonnegative_decomposition(self, nonnegative_rank4_kruskal_tensor):
         X = nonnegative_rank4_kruskal_tensor.construct_tensor()
-        cp_als = cp.CP_ALS(4, max_its=1000, convergence_tol=1e-10, non_negativity_constraints=[True]*3)
+        cp_als = cp.CP_ALS(4, max_its=1000, convergence_tol=1e-10, non_negativity_constraints=[True, True, True])
         estimated_ktensor = cp_als.fit_transform(X)
         estimated_ktensor.normalize_components()
 
@@ -48,6 +50,30 @@ class TestCPALS:
         assert metrics.factor_match_score(
             nonnegative_rank4_kruskal_tensor.factor_matrices, estimated_ktensor.factor_matrices
         )[0] > 1-1e-7
+    
+    def test_rank4_monotone_convergence(self, rank4_kruskal_tensor):
+        X = rank4_kruskal_tensor.construct_tensor()
+        cp_als = cp.CP_ALS(4, max_its=100, convergence_tol=1e-10)
+        cp_als._update_als_factor = ensure_monotonicity(
+            cp_als,
+            '_update_als_factor',
+            'MSE',
+            tol=1e-20
+        )
+        cp_als.fit_transform(X)
+    
+    def test_rank4_nonnegative_monotone_convergence(self, nonnegative_rank4_kruskal_tensor):
+        X = nonnegative_rank4_kruskal_tensor.construct_tensor()
+        cp_als = cp.CP_ALS(4, max_its=100, convergence_tol=1e-10, non_negativity_constraints=[True, True, True])
+        cp_als._update_als_factor = ensure_monotonicity(
+            cp_als,
+            '_update_als_factor',
+            'MSE',
+            tol=1e-20
+        )
+        for constraints in itertools.product([True, False], repeat=3):
+            cp_als.non_negativity_constraints = constraints
+            cp_als.fit_transform(X)
     
     def test_store_and_load_from_checkpoint(self, rank4_kruskal_tensor):
         max_its = 20
