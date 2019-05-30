@@ -137,4 +137,8 @@ def calculate_core_consistencies(X, upper_rank=5):
         A, B, C = factors
         c = core_consistency(X, A, B, C)
         core_consistencies.append(c)
-    return core_consistencies
+    return core_consistencieso
+
+def leverage(factor_matrix):
+    leverage_scores = np.diagonal(np.linalg.inv(factor_matrix@(factor_matrix.T@factor_matrix))@factor_matrix.T)
+    return leverage_scores
