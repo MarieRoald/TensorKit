@@ -1,4 +1,5 @@
 import numpy as np
+from copy import deepcopy
 from . import base
 from . import cp_old as cp
 
@@ -141,3 +142,52 @@ def prepare_for_comparison(factors):
         normalized_factors[i] *= sign
         signs.append(sign)
     return normalized_factors, signs, norms
+
+
+def get_signs(X, factor_matrix, data_driven=True):
+    # TODO: hva om den er null?
+    if not data_driven:
+        return np.sign(factor_matrix.sum(axis=0))
+
+    S = np.linalg.lstsq(factor_matrix, X)[0]
+    signs = np.zeros(factor_matrix.shape[1])
+    for r in range(factor_matrix.shape[1]):
+        signs[r] = np.sign(np.sum(S[r]**2 * np.sign(S[r]))).astype(factor_matrix.dtype)
+        # signs[r] = np.sign(np.sum(S[r])).astype(factor_matrix.dtype)  <- This did not work either
+    
+    return signs
+
+def signfix_evolving_factors(data_tensor, evolving_factor, evolve_over_factor, data_driven=True):
+    fixed_evolving_factor = evolving_factor.copy()
+    fixed_evolve_over_factor = evolve_over_factor.copy()
+    for k in range(len(evolving_factor)):
+        signs = get_signs(data_tensor[k], evolving_factor[k], data_driven=data_driven)
+        
+        fixed_evolving_factor[k] *= signs
+        fixed_evolve_over_factor[k] *= signs
+    
+    return fixed_evolving_factor, fixed_evolve_over_factor
+
+def signfix_normal_factors(data_tensor, fixing_factors, flipping_factors, data_driven=True):
+    unfolded_data_tensor = data_tensor.reshape(data_tensor.shape[0], -1)
+    signs = get_signs(unfolded_data_tensor, fixing_factors, data_driven)
+    
+    return fixing_factors*signs[np.newaxis], flipping_factors*signs[np.newaxis]
+
+def fix_signs_evolving_tensor(evolving_tensor, data_tensor):
+
+    evolving_factor = evolving_tensor.B
+    evolve_over_factor = evolving_tensor.C
+
+    fixed_evolving_factor, fixed_evolve_over_factor = signfix_evolving_factors(data_tensor, evolving_factor, evolve_over_factor)
+    
+    fixed_evolving_tensor = deepcopy(evolving_tensor)
+
+    fixed_evolving_tensor._B = fixed_evolving_factor
+    fixed_evolving_tensor._C = fixed_evolve_over_factor
+    return fixed_evolving_tensor
+
+
+
+
+
