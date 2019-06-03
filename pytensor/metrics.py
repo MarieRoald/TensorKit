@@ -221,7 +221,7 @@ def factor_match_score_parafac2(
 
     max_fms = -1
     best_permutation = None
-    true_factors = [true_factors[0], true_factors[1]]
+    true_factors = [true_factors[0], true_factors[2]]
 
     for permutation in itertools.permutations(range(estimated_rank), r=rank):
         permuted_factors = [
