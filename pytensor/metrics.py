@@ -154,10 +154,22 @@ def _factor_match_score_parafac2(true_factors, estimated_factors, weight_penalty
     rank = true_factors[0].shape[1]
 
     # Make sure columns of factor matrices are normalized
-    true_factors, true_norms = utils.normalize_factors(true_factors)
-    estimated_factors, estimated_norms = utils.normalize_factors(estimated_factors)
+    # true_factors, true_norms = utils.normalize_factors(true_factors)
+    # estimated_factors, estimated_norms = utils.normalize_factors(estimated_factors)
+
+    true_factors = [
+        true_factors[0]/np.linalg.norm(true_factors[0], axis=0),
+        [f/np.linalg.norm(f, axis=0) for f in true_factors[1]],
+        true_factors[2]/np.linalg.norm(true_factors[2], axis=0)
+    ]
+    true_factors = [
+        estimated_factors[0]/np.linalg.norm(estimated_factors[0], axis=0),
+        [f/np.linalg.norm(f, axis=0) for f in estimated_factors[1]],
+        estimated_factors[2]/np.linalg.norm(estimated_factors[2], axis=0)
+    ]
 
     if weight_penalty:
+        raise NotImplementedError
         true_weights = np.prod(np.concatenate(true_norms), axis=0)
         estimated_weights = np.prod(np.concatenate(estimated_norms), axis=0)
     else:
