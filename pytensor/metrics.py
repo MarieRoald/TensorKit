@@ -211,7 +211,11 @@ def factor_match_score_parafac2(
     best_permutation = None
 
     for permutation in itertools.permutations(range(estimated_rank), r=rank):
-        permuted_factors = utils.permute_factors(permutation, estimated_factors)
+        permuted_factors = [
+            estimated_factors[0][:, permutation],
+            [f[:, permutation] for f in estimated_factors[1]],
+            estimated_factors[2][:, permutation]
+        ]
 
         fms = fms_reduction(
             _factor_match_score_parafac2(
