@@ -43,7 +43,6 @@ def _factor_match_score(true_factors, estimated_factors, weight_penalty=True, no
         scores.append(score)
     return scores
 
-
 def factor_match_score(
     true_factors, estimated_factors, weight_penalty=True, fms_reduction="min"
 ):
@@ -142,3 +141,85 @@ def calculate_core_consistencies(X, upper_rank=5):
 def leverage(factor_matrix):
     leverage_scores = np.diagonal(np.linalg.inv(factor_matrix@(factor_matrix.T@factor_matrix))@factor_matrix.T)
     return leverage_scores
+
+
+def _factor_match_score_parafac2(true_factors, estimated_factors, weight_penalty=True, nonnegative=True):
+
+    if len(true_factors[0].shape) == 1:
+        true_factors = [factor.reshape(-1,1) for factor in true_factors]
+    if len(estimated_factors[0].shape) == 1:
+        estimated_factors =  [factor.reshape(-1,1) for factor in estimated_factors] 
+    
+ 
+    rank = true_factors[0].shape[1]
+
+    # Make sure columns of factor matrices are normalized
+    true_factors, true_norms = utils.normalize_factors(true_factors)
+    estimated_factors, estimated_norms = utils.normalize_factors(estimated_factors)
+
+    if weight_penalty:
+        true_weights = np.prod(np.concatenate(true_norms), axis=0)
+        estimated_weights = np.prod(np.concatenate(estimated_norms), axis=0)
+    else:
+        true_weights = np.ones((rank,))
+        estimated_weights = np.ones((rank,))
+
+    scores = []
+    for r in range(rank):
+        score = 1 - weight_score(true_weights[r], estimated_weights[r])
+
+        for true_factor, estimated_factor in zip(true_factors[0:3:2], estimated_factors[0:3:2]):
+            if nonnegative:
+                score *= np.abs(true_factor[:, r].T @ estimated_factor[:, r])
+            else:
+                score *= true_factor[:, r].T @ estimated_factor[:, r]
+
+        true_evolving_factor = true_factors[1]
+        estimated_evolving_factor = estimated_factors[1]
+
+        evolving_score = 1
+
+        for true_factor, estimated_factor in zip(true_evolving_factor, estimated_evolving_factor):
+            if nonnegative:
+                evolving_score *= np.abs(true_factor[:, r].T @ estimated_factor[:, r])
+            else:
+                evolving_score *= true_factor[:, r].T @ estimated_factor[:, r]
+
+        K = len(true_evolving_factor)
+
+        evolving_score = evolving_score**(1/K)
+        score *= evolving_score
+
+        scores.append(score)
+    return scores
+
+
+def factor_match_score_parafac2(
+    true_factors, estimated_factors, weight_penalty=True, fms_reduction="min"
+):
+    if fms_reduction == "min":
+        fms_reduction = np.min
+    elif fms_reduction == "mean":
+        fms_reduction = np.mean
+    else:
+        raise ValueError('́`fms_reduction` must be either "min" or "mean".')
+
+    rank = true_factors[0].shape[1]
+    estimated_rank = estimated_factors[0].shape[1]
+
+    max_fms = -1
+    best_permutation = None
+
+    for permutation in itertools.permutations(range(estimated_rank), r=rank):
+        permuted_factors = utils.permute_factors(permutation, estimated_factors)
+
+        fms = fms_reduction(
+            _factor_match_score_parafac2(
+                true_factors, permuted_factors, weight_penalty=weight_penalty
+            )
+        )
+
+        if fms > max_fms:
+            max_fms = fms
+            best_permutation = permutation
+    return max_fms, best_permutation
