@@ -180,7 +180,8 @@ class CP_ALS(BaseCP):
         checkpoint_frequency=None,
         checkpoint_path=None,
         print_frequency=10,
-        non_negativity_constraints=None
+        non_negativity_constraints=None,
+        tikhonov_matrices=None
     ):
         super().__init__(
             rank=rank,
@@ -193,11 +194,40 @@ class CP_ALS(BaseCP):
         )
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
+        self.tikhonov_matrices = tikhonov_matrices
+
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self._rel_function_change = np.inf
         self.prev_SSE = self.SSE
+        if self.non_negativity_constraints is not None and self.tikhonov_matrices is not None:
+            for non_negative, tik_matrix in zip(self.non_negativity_constraints, self.tikhonov_matrices):
+                if non_negative and (tik_matrix not in [False, None]):
+                    raise ValueError("Cannot do non-negative and regularised on same mode.")
+
+        if self.non_negativity_constraints is None:
+            self.non_negativity_constraints = [False]*len(self.factor_matrices)
+
+        if self.tikhonov_matrices is None:
+            self.tikhonov_matrices = [None]*len(self.factor_matrices)
+        
+        for mode,_ in enumerate(self.tikhonov_matrices):
+            if self.tikhonov_matrices[mode] is False:
+                self.tikhonov_matrices[mode] = None
+        
+        if self.tikhonov_matrices[-1] is not None:
+            raise ValueError('Cannot have regularisation on last mode.')
+
+    @property
+    def regularised_loss(self):
+        loss = self.SSE
+        if self.tikhonov_matrices is not None:
+            for mode, tik in enumerate(self.tikhonov_matrices):
+                if tik is None or tik is False:
+                    continue
+                loss += 0.5*np.linalg.norm(tik@self.decomposition[mode])**2
+        return loss
 
     def _get_als_lhs(self, skip_mode):
         """Compute left hand side of least squares problem."""
@@ -214,6 +244,8 @@ class CP_ALS(BaseCP):
     def _get_rightsolve(self, mode):
         if self.non_negativity_constraints[mode]:
             return base.non_negative_rightsolve
+        if self.tikhonov_matrices[mode] is not None:
+            return base.create_sylvester_rightsolve(self.tikhonov_matrices[mode])
         return base.rightsolve
 
     def _update_als_factor(self, mode):
@@ -241,9 +273,6 @@ class CP_ALS(BaseCP):
         """Fit a CP model with Alternating Least Squares.
         """
         # TODO: logger?
-
-        if self.non_negativity_constraints is None:
-            self.non_negativity_constraints = [False]*len(self.factor_matrices)
 
         for it in range(self.max_its):
             if abs(self._rel_function_change) < self.convergence_tol:

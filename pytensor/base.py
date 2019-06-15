@@ -2,6 +2,17 @@ import numpy as np
 from scipy.optimize import nnls
 import h5py
 from abc import ABC, abstractmethod, abstractclassmethod
+from scipy.linalg import solve_sylvester
+
+
+def create_sylvester_rightsolve(tikhonov_matrix):
+    """Create a function to solve the problem XA + BX = C.
+    """
+    def regularised_rightsolve(A, B):
+        return solve_sylvester(tikhonov_matrix, A, B)
+    
+    return regularised_rightsolve
+
 
 
 def rightsolve(A, B):

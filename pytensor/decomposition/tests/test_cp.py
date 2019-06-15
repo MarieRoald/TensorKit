@@ -58,7 +58,7 @@ class TestCPALS:
             cp_als,
             '_update_als_factor',
             'MSE',
-            tol=1e-20
+            tol=1e-16
         )
         cp_als.fit_transform(X)
     
@@ -69,11 +69,25 @@ class TestCPALS:
             cp_als,
             '_update_als_factor',
             'MSE',
-            tol=1e-20
+            tol=1e-16
         )
         for constraints in itertools.product([True, False], repeat=3):
             cp_als.non_negativity_constraints = constraints
             cp_als.fit_transform(X)
+    
+    def test_rank4_regularised_monotone_convergence(self, rank4_kruskal_tensor):
+        X = rank4_kruskal_tensor.construct_tensor()
+        tik = [s*np.identity(s) for s in X.shape]
+        tik[-1] = None
+
+        cp_als = cp.CP_ALS(4, max_its=100, convergence_tol=1e-10, tikhonov_matrices=tik)
+        cp_als._update_als_factor = ensure_monotonicity(
+            cp_als,
+            '_update_als_factor',
+            'regularised_loss',
+            tol=1e-16,
+        )
+        cp_als.fit_transform(X)
     
     def test_store_and_load_from_checkpoint(self, rank4_kruskal_tensor):
         max_its = 20
