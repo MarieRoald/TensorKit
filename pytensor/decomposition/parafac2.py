@@ -6,6 +6,7 @@ from ..utils import normalize_factors, get_pca_loadings
 from .. import base
 
 
+
 class BaseParafac2(BaseDecomposer):
     """
     TODO: Ikke tillat at evolve_mode og evolve_over settes manuelt
@@ -267,3 +268,97 @@ class Parafac2_ALS(BaseParafac2):
         #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
         # from pdb import set_trace; set_trace()
 
+
+class SmoothParafac2_ALS(Parafac2_ALS):
+    def __init__(
+        self,
+        rank,
+        max_its,
+        convergence_tol=1e-10,
+        init='random',
+        loggers=None,
+        checkpoint_frequency=None,
+        checkpoint_path=None,
+        non_negativity_constraints=None,
+        smoothness_penalty=0,
+        print_frequency=10
+    ):
+        self.smoothness_penalty = smoothness_penalty
+        super().__init__(
+            rank=rank,
+            max_its=max_its,
+            convergence_tol=convergence_tol,
+            init=init,
+            loggers=loggers,
+            checkpoint_frequency=checkpoint_frequency,
+            checkpoint_path=checkpoint_path,
+            non_negativity_constraints=non_negativity_constraints,
+            print_frequency=print_frequency,
+        )
+    
+    @property
+    def _tikhonov_matrix(self):
+        if self.smoothness_penalty = 0:
+            return np.zeros((self.rank, self.rank))
+        projection_matrices = self.decomposition.projection_matrices
+        tikhonov_matrix = np.zeros((self.rank, self.rank))
+        for (P_k, P_kp1) in zip(projection_matrices[:-1], projection_matrices[1:]):
+            tikhonov_matrix += (P_k - P_kp1).T@(P_k - P_kp1)
+        
+        tikhonov_matrix = np.linalg.cholesky(self.smoothness_penalty*tikhonov_matrix.T)
+        return tikhonov_matrix
+
+    
+    def _update_parafac2_factors(self):
+        #print('Before projection update') 
+        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        self._update_projection_matrices()
+
+        #print('Before ALS update') 
+        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+
+        # TODO: Hva gjør jeg med PX?
+        self.cp_decomposer.set_target(self.projected_X)
+        self.cp_decomposer.tikhonov_matrices[1] = self._tikhonov_matrix
+        #self.cp_decomposer.set_target(ny_X)?
+        self.cp_decomposer._update_als_factors()
+        self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
+        self.cp_decomposition.weights[...] = np.ones_like(self.cp_decomposition.weights)
+        #print('After iteration') 
+        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        # from pdb import set_trace; set_trace()
+
+    def _solve_projection_matrix(self, lhs, rhs):
+        U, S, Vh = np.linalg.svd(rhs.T@(lhs), full_matrices=False)
+        S_tol = max(U.shape) * S[0] * (1e-16)
+        should_keep = np.diag(S > S_tol).astype(float)
+
+        return (Vh.T @ should_keep @ U.T).T
+    
+
+    def _update_projection_matrices(self):
+        K = self.X_shape[2]
+
+        A = self.decomposition.A
+        C = self.decomposition.C
+        blueprint_B = self.decomposition.blueprint_B
+
+        I = self.decomposition.shape[0]
+        J = self.decomposition.shape[1]
+
+        lhs = np.empty(shape=(I+self.rank, self.rank)) #TODO maybe not new array for every it?
+        rhs = np.empty(shape=(I+self.rank, J))
+        
+        lhs[I:] = np.sqrt(self.smoothness_penalty)*blueprint_B.T
+        
+        # NO PENALTY FOR k=0
+        updated_projection_matrix = self._solve_projection_matrix((C[0]*A)@blueprint_B, self.X[0])
+        self.decomposition.projection_matrices[0][...] = updated_projection_matrix
+
+        for k in np.random.permutation(np.arange(1, K)):
+            # C[:, k]*A is equivalent to A@np.diag(C[:, k])
+            lhs[:I] = (C[k]*A)@blueprint_B.T
+            rhs[:I] = self.X[k]
+            rhs[I:] = np.sqrt(self.smoothness_penalty)*blueprint_B.T@self.decomposition.projection_matrices[k-1].T
+
+            self.decomposition.projection_matrices[k][...] = self._solve_projection_matrix(lhs, rhs)

@@ -5,11 +5,15 @@ from abc import ABC, abstractmethod, abstractclassmethod
 from scipy.linalg import solve_sylvester
 
 
-def create_sylvester_rightsolve(tikhonov_matrix):
-    """Create a function to solve the problem XA + BX = C.
+def create_sylvester_rightsolve(P):
+    """Create a function to solve the problem X@A@A.T + B.T@B@X = C@A.T.
     """
+    P = P.T@P
+
     def regularised_rightsolve(A, B):
-        return solve_sylvester(tikhonov_matrix, A, B)
+        A_ = A@A.T
+        B_ = B@A.T
+        return solve_sylvester(P, A_, B_)
     
     return regularised_rightsolve
 

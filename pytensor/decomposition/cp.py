@@ -226,7 +226,8 @@ class CP_ALS(BaseCP):
             for mode, tik in enumerate(self.tikhonov_matrices):
                 if tik is None or tik is False:
                     continue
-                loss += 0.5*np.linalg.norm(tik@self.decomposition[mode])**2
+                loss += np.linalg.norm(tik@self.decomposition[mode])**2
+
         return loss
 
     def _get_als_lhs(self, skip_mode):
