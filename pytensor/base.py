@@ -2,15 +2,6 @@ import numpy as np
 from scipy.optimize import nnls
 import h5py
 from abc import ABC, abstractmethod, abstractclassmethod
-try:
-    from numba import jit, prange
-except ImportError:
-    withjit = False
-    jsafe_range = range
-else:
-    withjit = True
-    make_fast = jit(nopython=True, nogil=True, fastmath=True, parallel=True)
-    jsafe_range = prange
 
 
 def rightsolve(A, B):
@@ -37,12 +28,15 @@ def non_negative_rightsolve(A, B):
 
 
 def kron_binary_vectors(u, v):
+    """Efficient Kronecker product between two vectors.
+    """
     n, = u.shape
     m, = v.shape
     kprod = u[:, np.newaxis]*v[np.newaxis, :]
     return kprod.reshape(n*m)
 
 
+# TODO: Test the speed of tensorly's KR computation. Maybe use their expression.
 def khatri_rao_binary(A, B):
     """Calculates the Khatri-Rao product of A and B
     
@@ -58,9 +52,6 @@ def khatri_rao_binary(A, B):
     for i, row in enumerate(A):
         out[i*J:(i+1)*J] = row[np.newaxis, :]*B
     return out
-
-#if withjit:
-#    khatri_rao_binary = make_fast(khatri_rao_binary)
 
 
 def khatri_rao(*factors, skip=None):
@@ -98,6 +89,8 @@ def khatri_rao(*factors, skip=None):
 
 
 def kron(*factors):
+    """Efficient Kronecker product of multiple matrices.
+    """
     factors = list(factors).copy()
     num_factors = len(factors)
     product = factors[0]
@@ -108,6 +101,8 @@ def kron(*factors):
 
 
 def kron_binary(A, B):
+    """Efficient Kronecker product of the matrix A and B.
+    """
     n, m = A.shape
     p, q = B.shape
     kprod = A[:, np.newaxis, :, np.newaxis]*B[np.newaxis, :, np.newaxis, :]
@@ -115,6 +110,17 @@ def kron_binary(A, B):
 
 
 def matrix_khatri_rao_product(X, factors, mode):
+    """Compute the matricised tensor times Khatri Rao product along given mode.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Tensor
+    factors : List[np.ndarray]
+        List of factor matrices, the i-th factor matrix has shape [X.shape[i], rank]
+    mode : int
+        Which mode to unfold the tensor along. Should be between 0 and /len(factors) - 1)
+    """
     assert len(X.shape) == len(factors)
     if len(factors) == 3:
         return _mttkrp3(X, factors, mode)
@@ -200,24 +206,39 @@ def fold(M, n, shape):
     return np.moveaxis(np.reshape(M, newshape), 0, n)
 
 
-def unflatten_factors(A, rank, sizes):
+def unflatten_factors(flattened_factors, rank, sizes):
+    """Transform a flattened set of factor matrices to a list of numpy arrays.
+
+    Parameters
+    ----------
+    flattened_factors : np.ndarray
+        One dimensional numpy array as returned by ``flatten_factors``.
+    rank : int
+        The rank of the decomposition
+    sizes : Iterable[int]
+        The length of each mode of the tensor the factor matrices represent.
+    """
     n_modes = len(sizes)
     offset = 0
 
     factors = []
     for i, s in enumerate(sizes):
         stop = offset + (s * rank)
-        matrix = A[offset:stop].reshape(s, rank)
+        matrix = flattened_factors[offset:stop].reshape(s, rank)
         factors.append(matrix)
         offset = stop
     return factors
 
 
-def flatten_factors(factors):
+def flatten_factors(factor_matrices):
+    """Transform the list of factor matrices to a vector.
+
+    Inverted by ``unflatten_factors``.
+    """
     sizes = [np.prod(factor.shape) for factor in factors]
     offsets = np.cumsum([0] + sizes)[:-1]
     flattened = np.empty(np.sum(sizes))
-    for offset, size, factor in zip(offsets, sizes, factors):
+    for offset, size, factor in zip(offsets, sizes, factor_matrices):
         flattened[offset : offset + size] = factor.ravel()
     return flattened
 
@@ -433,6 +454,8 @@ class EvolvingTensor(BaseDecomposedTensor):
         return [self.A.shape[0], matrix_width, self.C.shape[0]]
     
     def construct_slices(self):
+        """Construct the data slices.
+        """
         slices = [None]*len(self.B)
         for k, matrix_size in enumerate(self.slice_shapes):
             slices[k] = self.construct_slice(k)
@@ -448,6 +471,9 @@ class EvolvingTensor(BaseDecomposedTensor):
         return loadings @ scores.T
 
     def construct_tensor(self):
+        """Construct the datatensor from the factors. 
+        Zero padding will be used if the tensor is irregular.
+        """
         if self.warning and not self.all_same_size:
             raise Warning(
                 'The factors have irregular shapes, zero padding will be used to construct tensor.\n'

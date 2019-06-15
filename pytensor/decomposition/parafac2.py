@@ -47,7 +47,6 @@ class BaseParafac2(BaseDecomposer):
         """SVD initalisation
         """
         # TODO: This does not work for irregular tensors
-
         K = self.X_shape[2]
         J = self.X_shape[1]
         Y = np.zeros([J, J])

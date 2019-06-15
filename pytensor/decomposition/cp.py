@@ -73,7 +73,14 @@ class BaseCP(BaseDecomposer):
                 )
 
     def init_components(self, initial_decomposition=None):
-        """
+        """Initialize the components with the initialization method in `self.init`. 
+        If `self.init` is not 'random' or 'svd' initial_decomposition must be provided.
+
+        Arguments:
+        ----------
+        initial_decompostion: pytensor.base.KruskalTensor or str (optional)
+            The initial KruskalTensor (init=precomputed) to use or the path of the 
+            logfile to load (init=from_file).
         """
         if (initial_decomposition is not None and 
             self.init.lower() not in  ['precomputed', 'from_checkpoint']):
