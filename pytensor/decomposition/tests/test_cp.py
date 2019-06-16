@@ -72,6 +72,7 @@ class TestCPALS:
             tol=1e-10
         )
         for constraints in itertools.product([True, False], repeat=3):
+            print(constraints)
             cp_als.non_negativity_constraints = constraints
             cp_als.fit_transform(X)
     
