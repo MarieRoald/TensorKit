@@ -227,7 +227,6 @@ class CP_ALS(BaseCP):
                 if tik is None or tik is False:
                     continue
                 loss += np.linalg.norm(tik@self.decomposition[mode])**2
-
         return loss
 
     def _get_als_lhs(self, skip_mode):
@@ -258,7 +257,8 @@ class CP_ALS(BaseCP):
 
         new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
-        self.decomposition.normalize_components()
+        
+        #self.decomposition.normalize_components()
 
     def _update_als_factors(self):
         """Updates factors with alternating least squares."""
@@ -285,6 +285,7 @@ class CP_ALS(BaseCP):
 
             self._after_fit_iteration()
         
+        self.decomposition.normalize_components()
         if (it+1) % self.checkpoint_frequency != 0:
             self.store_checkpoint()
 
