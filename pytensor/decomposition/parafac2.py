@@ -298,7 +298,7 @@ class SmoothParafac2_ALS(Parafac2_ALS):
     
     @property
     def _tikhonov_matrix(self):
-        if self.smoothness_penalty = 0:
+        if self.smoothness_penalty == 0:
             return np.zeros((self.rank, self.rank))
         projection_matrices = self.decomposition.projection_matrices
         tikhonov_matrix = np.zeros((self.rank, self.rank))
