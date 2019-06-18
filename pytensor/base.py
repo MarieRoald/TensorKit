@@ -13,7 +13,11 @@ def create_sylvester_rightsolve(P):
     def regularised_rightsolve(A, B):
         A_ = A@A.T
         B_ = B@A.T
-        return solve_sylvester(P, A_, B_)
+        try:
+            return solve_sylvester(P, A_, B_)
+        except Exception as e:
+            print(P)
+            raise e
     
     return regularised_rightsolve
 
