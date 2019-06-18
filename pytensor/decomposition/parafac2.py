@@ -306,7 +306,7 @@ class SmoothParafac2_ALS(Parafac2_ALS):
             tikhonov_matrix += (P_k - P_kp1).T@(P_k - P_kp1)/len(P_k - 1)
         
         D, P = np.linalg.eigh(tikhonov_matrix)
-        D[D <= 1e-10*D.max()] = 1e-8*D.max()
+        D[D <= 1e-10*D.max()] = 1e-10*D.max()
         tikhonov_matrix = (D*P)@P.T
 
         tikhonov_matrix = np.linalg.cholesky(self.smoothness_penalty*tikhonov_matrix.T)
