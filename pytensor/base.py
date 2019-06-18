@@ -13,11 +13,10 @@ def create_sylvester_rightsolve(P):
     def regularised_rightsolve(A, B):
         A_ = A@A.T
         B_ = B@A.T
-        try:
-            return solve_sylvester(P, A_, B_)
-        except Exception as e:
-            print(P)
-            raise e
+        if any(np.isinf(P)):
+            return np.zeros((P.shape[0], A.shape[0]))
+
+        return solve_sylvester(P, A_, B_)
     
     return regularised_rightsolve
 
