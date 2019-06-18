@@ -303,10 +303,10 @@ class SmoothParafac2_ALS(Parafac2_ALS):
         projection_matrices = self.decomposition.projection_matrices
         tikhonov_matrix = np.zeros((self.rank, self.rank))
         for (P_k, P_kp1) in zip(projection_matrices[:-1], projection_matrices[1:]):
-            tikhonov_matrix += (P_k - P_kp1).T@(P_k - P_kp1)
+            tikhonov_matrix += (P_k - P_kp1).T@(P_k - P_kp1)/len(P_k - 1)
         
         D, P = np.linalg.eigh(tikhonov_matrix)
-        D[D <= 1e-10*D.max()] = 1e-10*D.max()
+        D[D <= 1e-10*D.max()] = 1e-8*D.max()
         tikhonov_matrix = (D*P)@P.T
 
         tikhonov_matrix = np.linalg.cholesky(self.smoothness_penalty*tikhonov_matrix.T)
@@ -365,6 +365,6 @@ class SmoothParafac2_ALS(Parafac2_ALS):
             # C[:, k]*A is equivalent to A@np.diag(C[:, k])
             lhs[:I] = (C[k]*A)@blueprint_B.T
             rhs[:I] = self.X[k]
-            rhs[I:] = np.sqrt(self.smoothness_penalty)*blueprint_B.T@self.decomposition.projection_matrices[k-1].T
+            rhs[I:] = np.sqrt(self.smoothness_penalty/(K-1))*blueprint_B.T@self.decomposition.projection_matrices[k-1].T
 
             self.decomposition.projection_matrices[k][...] = self._solve_projection_matrix(lhs, rhs)
