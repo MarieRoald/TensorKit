@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from numbers import Number
 
 import h5py
 import numpy as np
@@ -181,7 +182,8 @@ class CP_ALS(BaseCP):
         checkpoint_path=None,
         print_frequency=10,
         non_negativity_constraints=None,
-        tikhonov_matrices=None
+        tikhonov_matrices=None,
+        ridge_penalties=None
     ):
         super().__init__(
             rank=rank,
@@ -195,6 +197,7 @@ class CP_ALS(BaseCP):
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
         self.tikhonov_matrices = tikhonov_matrices
+        self.ridge_penalties = ridge_penalties
 
 
     def _init_fit(self, X, max_its, initial_decomposition):
@@ -211,6 +214,11 @@ class CP_ALS(BaseCP):
 
         if self.tikhonov_matrices is None:
             self.tikhonov_matrices = [None]*len(self.factor_matrices)
+
+        if self.ridge_penalties is None:
+            self.ridge_penalties = [None]*len(self.factor_matrices)
+        if isinstance(self.ridge_penalties, Number):
+            self.ridge_penalties = [self.ridge_penalties]*len(self.factor_matrices)
         
         for mode,_ in enumerate(self.tikhonov_matrices):
             if self.tikhonov_matrices[mode] is False:
@@ -241,12 +249,19 @@ class CP_ALS(BaseCP):
     def _get_als_rhs(self, mode):
         return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
 
+
     def _get_rightsolve(self, mode):
+
         if self.non_negativity_constraints[mode]:
-            return base.non_negative_rightsolve
-        if self.tikhonov_matrices[mode] is not None:
-            return base.create_sylvester_rightsolve(self.tikhonov_matrices[mode])
-        return base.rightsolve
+            rightsolve = base.non_negative_rightsolve
+        elif self.tikhonov_matrices[mode] is not None:
+            rightsolve = base.create_sylvester_rightsolve(self.tikhonov_matrices[mode])
+        else:
+            rightsolve = base.rightsolve
+
+        if self.ridge_penalties[mode] is not None:
+            rightsolve = base.add_ridge(rightsolve, self.ridge_penalties[mode])
+        return rightsolve
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode."""

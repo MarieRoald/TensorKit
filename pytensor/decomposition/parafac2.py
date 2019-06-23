@@ -193,6 +193,7 @@ class Parafac2_ALS(BaseParafac2):
         checkpoint_frequency=None,
         checkpoint_path=None,
         non_negativity_constraints=None,
+        ridge_penalties=None,
         print_frequency=10
     ):
         super().__init__(
@@ -206,6 +207,7 @@ class Parafac2_ALS(BaseParafac2):
         )
         self.non_negativity_constraints = non_negativity_constraints
         self.print_frequency = print_frequency
+        self.ridge_penalties = ridge_penalties
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
@@ -217,7 +219,7 @@ class Parafac2_ALS(BaseParafac2):
         self.cp_decomposer = cp.CP_ALS(self.rank, max_its=1000, 
                                        convergence_tol=0, print_frequency=-1, 
                                        non_negativity_constraints=self.non_negativity_constraints,
-                                       init='precomputed')
+                                       init='precomputed', ridge_penalties=self.ridge_penalties)
         self.cp_decomposer._init_fit(X=self.projected_X, max_its=np.inf, initial_decomposition=self.cp_decomposition)
 
     def _fit(self):
@@ -280,6 +282,7 @@ class SmoothParafac2_ALS(Parafac2_ALS):
         checkpoint_frequency=None,
         checkpoint_path=None,
         non_negativity_constraints=None,
+        ridge_penalties=None,
         smoothness_penalty=0,
         print_frequency=10
     ):
@@ -293,6 +296,7 @@ class SmoothParafac2_ALS(Parafac2_ALS):
             checkpoint_frequency=checkpoint_frequency,
             checkpoint_path=checkpoint_path,
             non_negativity_constraints=non_negativity_constraints,
+            ridge_penalties=ridge_penalties,
             print_frequency=print_frequency,
         )
     
