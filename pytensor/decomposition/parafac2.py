@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import numpy as np
+from fbpca import pca
 from .base_decomposer import BaseDecomposer
 from . import cp
 from ..utils import normalize_factors, get_pca_loadings
@@ -159,7 +160,8 @@ class BaseParafac2(BaseDecomposer):
             C = self.decomposition.C
             blueprint_B = self.decomposition.blueprint_B
 
-            U, S, Vh = np.linalg.svd(self.X[k].T@((C[k]*A)@blueprint_B.T), full_matrices=False)
+            # U, S, Vh = np.linalg.svd(self.X[k].T@((C[k]*A)@blueprint_B.T), full_matrices=False)
+            U, S, Vh = pca(self.X[k].T@((C[k]*A)@blueprint_B.T), self.rank)
             S_tol = max(U.shape) * S[0] * (1e-16)
             # C[:, k]*A is equivalent to A@np.diag(C[:, k])
             should_keep = np.diag(S > S_tol).astype(float)
@@ -333,7 +335,8 @@ class SmoothParafac2_ALS(Parafac2_ALS):
         # from pdb import set_trace; set_trace()
 
     def _solve_projection_matrix(self, lhs, rhs):
-        U, S, Vh = np.linalg.svd(rhs.T@(lhs), full_matrices=False)
+        # U, S, Vh = np.linalg.svd(rhs.T@(lhs), full_matrices=False)
+        U, S, Vh = pca(rhs.T@(lhs), self.rank)
         S_tol = max(U.shape) * S[0] * (1e-16)
         should_keep = np.diag(S > S_tol).astype(float)
 
