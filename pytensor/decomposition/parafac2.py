@@ -124,8 +124,6 @@ class BaseParafac2(BaseDecomposer):
     def loss(self):
         return self.SSE
 
-    def _fit(self):
-        return 1 - self.SSE/(self.X_norm**2)
 
     @property
     def SSE(self):
@@ -213,7 +211,8 @@ class Parafac2_ALS(BaseParafac2):
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self.prev_SSE = self.SSE
+        #self.prev_SSE = self.SSE
+        self.prev_loss = self.regularised_loss
         self._rel_function_change = np.inf
 
     def _prepare_cp_decomposer(self):
@@ -249,10 +248,25 @@ class Parafac2_ALS(BaseParafac2):
         ):
             self.store_checkpoint()
 
+    @property
+    def regularised_loss(self):
+        loss = self.SSE
+
+        if self.ridge_penalties is not None:
+            for mode, ridge in enumerate(self.ridge_penalties):
+                if ridge is None:
+                    continue
+                ridge /= len(self.decomposition[mode])
+                loss += ridge*np.linalg.norm(self.decomposition[mode])**2
+            
+        return loss
+
+    def _fit(self):
+        return 1 - self.SSE/(self.X_norm**2)
+
     def _update_convergence(self):
-        SSE = self.SSE
-        self._rel_function_change = (self.prev_SSE - SSE)/self.prev_SSE
-        self.prev_SSE = SSE
+        self._rel_function_change = (self.prev_loss - self.loss)/self.prev_loss
+        self.prev_loss = self.regularised_loss
 
     def _update_parafac2_factors(self):
         #print('Before projection update') 
@@ -318,6 +332,14 @@ class SmoothParafac2_ALS(Parafac2_ALS):
         tikhonov_matrix = np.linalg.cholesky(self.smoothness_penalty*tikhonov_matrix.T)
         return tikhonov_matrix
 
+    @property
+    def regularised_loss(self):
+        loss = super().regularised_loss
+
+        if self.smoothness_penalty is not None:
+            pass
+            
+        return loss
     
     def _update_parafac2_factors(self):
         #print('Before projection update') 
