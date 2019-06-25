@@ -213,7 +213,7 @@ class Parafac2_ALS(BaseParafac2):
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         if isinstance(self.ridge_penalties, Number):
-            self.ridge_penalties = [self.ridge_penalties]*len(self.factor_matrices)
+            self.ridge_penalties = [self.ridge_penalties]*3
         #self.prev_SSE = self.SSE
         self.prev_loss = self.regularised_loss
         self._rel_function_change = np.inf
