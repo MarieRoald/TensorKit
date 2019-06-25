@@ -236,7 +236,6 @@ class CP_ALS(BaseCP):
             for mode, ridge in enumerate(self.ridge_penalties):
                 if ridge is None:
                     continue
-                ridge /= len(self.decomposition[mode])
                 loss += ridge*np.linalg.norm(self.decomposition[mode])**2
             
         if self.tikhonov_matrices is not None:
@@ -281,7 +280,7 @@ class CP_ALS(BaseCP):
 
         new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
-        
+        # print((new_factor@lhs - rhs)@lhs.T + new_factor )
         #self.decomposition.normalize_components()
 
     def _update_als_factors(self):
@@ -291,7 +290,7 @@ class CP_ALS(BaseCP):
             self._update_als_factor(mode)
     
     def _update_convergence(self):
-        self._rel_function_change = (self.prev_loss - self.loss)/self.prev_loss
+        self._rel_function_change = (self.prev_loss - self.regularised_loss)/self.prev_loss
         self.prev_loss = self.regularised_loss
 
     def _fit(self):
