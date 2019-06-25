@@ -86,15 +86,16 @@ class TestRidgeRightsolve:
     
     @pytest.fixture
     def regularised_rightsolve(self):
-        return base.add_ridge(self.rightsolve, 1)
+        return base.add_ridge(self.rightsolve, 2)
 
-    def test_least_squares_vector_zero_gradient(self, regularised_rightsolve):
-        A = self.random((2, 3))
-        x = self.random((1, 2))
-        b = x@A
+    def test_least_squares_matrix_zero_gradient(self, regularised_rightsolve):
+        for i in range(10):
+            A = self.random((20, 30))
+            x = self.random((10, 20))
+            b = x@A
 
-        x_hat = regularised_rightsolve(A, b)
-        assert np.allclose((x_hat@A - b)@A.T + x_hat, 0) 
+            x_hat = regularised_rightsolve(A, b)
+            assert np.allclose((x_hat@A - b)@A.T + 2*x_hat, 0) 
         
 
 
