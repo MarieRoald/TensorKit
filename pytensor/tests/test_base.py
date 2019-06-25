@@ -78,6 +78,27 @@ class TestNonnegativeRightsolve(TestRightsolve):
         assert np.all(self.rightsolve(nonnegative_A, B) >= 0)
 
 
+class TestRidgeRightsolve:
+    random = partial(np.random.uniform, 0, 1)
+
+    def rightsolve(self, *args, **kwargs):
+        return base.rightsolve(*args, **kwargs)
+    
+    @pytest.fixture
+    def regularised_rightsolve(self):
+        return base.add_ridge(self.rightsolve, 1)
+
+    def test_least_squares_vector_zero_gradient(self, regularised_rightsolve):
+        A = self.random((2, 3))
+        x = self.random((1, 2))
+        b = x@A
+
+        x_hat = regularised_rightsolve(A, b)
+        assert np.allclose((x_hat@A - b)@A.T + x_hat, 0) 
+        
+
+
+
 class TestKruskalTensor:
     @pytest.fixture
     def random_3mode_ktensor(self):

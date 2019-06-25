@@ -4,6 +4,15 @@ import h5py
 from abc import ABC, abstractmethod, abstractclassmethod
 from scipy.linalg import solve_sylvester
 
+def add_ridge(rightsolve, penalty):
+    def new_rightsolve(A, B):
+        A = np.concatenate([A, penalty*np.eye(A.shape[0])], axis=1)
+        if B.ndim == 1:
+            B = B[:, np.newaxis]
+        B = np.concatenate([B, np.zeros((B.shape[0], A.shape[0]))], axis=1)
+        # B = np.concatenate([B, np.zeros_like(A)], axis=1)
+        return rightsolve(A, B)
+    return new_rightsolve
 
 def create_sylvester_rightsolve(P):
     """Create a function to solve the problem X@A@A.T + B.T@B@X = C@A.T.
