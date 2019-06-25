@@ -240,7 +240,7 @@ class Parafac2_ALS(BaseParafac2):
             self._update_convergence()
 
             if it% self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'{it:6}: The MSE is {self.MSE: 4g}, f is {self.loss():4g}, '
+                print(f'{it:6}: The MSE is {self.MSE: 4g}, f is {self.regularised_loss:.8g}, '
                       f'improvement is {self._rel_function_change:g}')
 
             self._after_fit_iteration()
@@ -259,7 +259,6 @@ class Parafac2_ALS(BaseParafac2):
             for mode, ridge in enumerate(self.ridge_penalties):
                 if ridge is None:
                     continue
-                ridge /= len(self.decomposition[mode])
                 loss += ridge*np.linalg.norm(self.decomposition[mode])**2
             
         return loss
@@ -268,25 +267,26 @@ class Parafac2_ALS(BaseParafac2):
         return 1 - self.SSE/(self.X_norm**2)
 
     def _update_convergence(self):
-        self._rel_function_change = (self.prev_loss - self.loss())/self.prev_loss
+        self._rel_function_change = (self.prev_loss - self.regularised_loss)/self.prev_loss
         self.prev_loss = self.regularised_loss
 
     def _update_parafac2_factors(self):
         #print('Before projection update') 
-        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        #print(f'The MSE is {self.MSE: 4e}, f is {self.regularised_loss:4e}')
         self._update_projection_matrices()
 
         #print('Before ALS update') 
-        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        #print(f'The MSE is {self.MSE: 4e}, f is {self.regularised_loss:4e}')
 
         # TODO: Hva gjør jeg med PX?
         self.cp_decomposer.set_target(self.projected_X)
         #self.cp_decomposer.set_target(ny_X)?
         self.cp_decomposer._update_als_factors()
-        self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
-        self.cp_decomposition.weights = self.cp_decomposition.weights*0 + 1
+        if self.ridge_penalties is None or all(r is None for r in self.ridge_penalties):
+            self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
+            self.cp_decomposition.weights = self.cp_decomposition.weights*0 + 1
         #print('After iteration') 
-        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        #print(f'The MSE is {self.MSE: 4e}, f is {self.regularised_loss:4e}')
         # from pdb import set_trace; set_trace()
 
 
@@ -346,21 +346,22 @@ class SmoothParafac2_ALS(Parafac2_ALS):
     
     def _update_parafac2_factors(self):
         #print('Before projection update') 
-        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        #print(f'The MSE is {self.MSE: 4f}, f is {self.regularised_loss:4f}')
         self._update_projection_matrices()
 
         #print('Before ALS update') 
-        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        #print(f'The MSE is {self.MSE: 4f}, f is {self.regularised_loss:4f}')
 
         # TODO: Hva gjør jeg med PX?
         self.cp_decomposer.set_target(self.projected_X)
         self.cp_decomposer.tikhonov_matrices[1] = self._tikhonov_matrix
         #self.cp_decomposer.set_target(ny_X)?
         self.cp_decomposer._update_als_factors()
-        self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
-        self.cp_decomposition.weights[...] = np.ones_like(self.cp_decomposition.weights)
+        if self.ridge_penalties is None or all(r is None for r in self.ridge_penalties):
+            self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
+            self.cp_decomposition.weights = self.cp_decomposition.weights*0 + 1
         #print('After iteration') 
-        #print(f'The MSE is {self.MSE: 4f}, f is {self.loss():4f}')
+        #print(f'The MSE is {self.MSE: 4f}, f is {self.regularised_loss:4f}')
         # from pdb import set_trace; set_trace()
 
     def _solve_projection_matrix(self, lhs, rhs):
