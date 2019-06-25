@@ -6,7 +6,7 @@ from scipy.linalg import solve_sylvester
 
 def add_ridge(rightsolve, penalty):
     def new_rightsolve(A, B):
-        A = np.concatenate([A, penalty*np.eye(A.shape[0])/len(A)], axis=1)
+        A = np.concatenate([A, np.sqrt(penalty)*np.eye(A.shape[0])], axis=1)
         if B.ndim == 1:
             B = B[:, np.newaxis]
         B = np.concatenate([B, np.zeros((B.shape[0], A.shape[0]))], axis=1)
