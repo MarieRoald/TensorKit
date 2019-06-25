@@ -264,11 +264,11 @@ class Parafac2_ALS(BaseParafac2):
             
         return loss
 
-    def _fit(self):
+    def _variance_explained(self):
         return 1 - self.SSE/(self.X_norm**2)
 
     def _update_convergence(self):
-        self._rel_function_change = (self.prev_loss - self.loss)/self.prev_loss
+        self._rel_function_change = (self.prev_loss - self.loss())/self.prev_loss
         self.prev_loss = self.regularised_loss
 
     def _update_parafac2_factors(self):
