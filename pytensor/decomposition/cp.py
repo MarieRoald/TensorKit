@@ -202,8 +202,6 @@ class CP_ALS(BaseCP):
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self._rel_function_change = np.inf
-        self.prev_loss = self.regularised_loss
         if self.non_negativity_constraints is not None and self.tikhonov_matrices is not None:
             for non_negative, tik_matrix in zip(self.non_negativity_constraints, self.tikhonov_matrices):
                 if non_negative and (tik_matrix not in [False, None]):
@@ -226,6 +224,9 @@ class CP_ALS(BaseCP):
         
         if self.tikhonov_matrices[-1] is not None:
             raise ValueError('Cannot have regularisation on last mode.')
+
+        self._rel_function_change = np.inf
+        self.prev_loss = self.regularised_loss
 
     @property
     def regularised_loss(self):
