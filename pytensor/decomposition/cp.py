@@ -203,7 +203,7 @@ class CP_ALS(BaseCP):
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self._rel_function_change = np.inf
-        self.prev_SSE = self.SSE
+        self.prev_loss = self.regularised_loss
         if self.non_negativity_constraints is not None and self.tikhonov_matrices is not None:
             for non_negative, tik_matrix in zip(self.non_negativity_constraints, self.tikhonov_matrices):
                 if non_negative and (tik_matrix not in [False, None]):
@@ -230,6 +230,14 @@ class CP_ALS(BaseCP):
     @property
     def regularised_loss(self):
         loss = self.SSE
+
+        if self.ridge_penalties is not None:
+            for mode, ridge in enumerate(self.ridge_penalties):
+                if ridge is None:
+                    continue
+                ridge /= len(self.decomposition[mode])
+                loss += ridge*np.linalg.norm(self.decomposition[mode])**2
+            
         if self.tikhonov_matrices is not None:
             for mode, tik in enumerate(self.tikhonov_matrices):
                 if tik is None or tik is False:
@@ -282,8 +290,8 @@ class CP_ALS(BaseCP):
             self._update_als_factor(mode)
     
     def _update_convergence(self):
-        self._rel_function_change = (self.prev_SSE - self.SSE)/self.prev_SSE
-        self.prev_SSE = self.SSE 
+        self._rel_function_change = (self.prev_loss - self.loss)/self.prev_loss
+        self.prev_loss = self.regularised_loss
 
     def _fit(self):
         """Fit a CP model with Alternating Least Squares.
@@ -296,7 +304,7 @@ class CP_ALS(BaseCP):
             self._update_als_factors()
             self._update_convergence()
             if it % self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'{it}: The MSE is {self.MSE:4g}, f is {self.loss():4g}, improvement is {self._rel_function_change:4g}')
+                print(f'{it}: The MSE is {self.MSE:4g}, f is {self.regularised_loss:4g}, improvement is {self._rel_function_change:4g}')
 
             self._after_fit_iteration()
         
