@@ -140,9 +140,8 @@ def calculate_core_consistencies(X, upper_rank=5):
     return core_consistencies
 
 def leverage(factor_matrix):
-    leverage_scores = np.diagonal(np.linalg.inv(factor_matrix@(factor_matrix.T@factor_matrix))@factor_matrix.T)
+    leverage_scores = np.diagonal(factor_matrix@np.linalg.inv((factor_matrix.T@factor_matrix)).T@factor_matrix.T)
     return leverage_scores
-
 
 def _factor_match_score_parafac2(true_factors, estimated_factors, weight_penalty=True, nonnegative=True):
 
