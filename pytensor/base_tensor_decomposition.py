@@ -2,13 +2,14 @@ import numpy as np
 import base
 import utils
 
+
 class BaseTensorDecomposition:
     def __init__(self):
         pass
 
     def decompose(self, tensor):
         pass
-    
+
     def compose_from_factors(self, factors):
         pass
 
@@ -20,7 +21,7 @@ class Base_CP(BaseTensorDecomposition):
     def __init__(self, rank, init_scheme):
         pass
 
-    def init_factors(self, tensor, rank, init_scheme='random'):
+    def init_factors(self, tensor, rank, init_scheme="random"):
         """Initialize factor matrices.
 
         Method of initialization is decided by `init_scheme`. If `init_scheme == 'random'`, the 
@@ -38,13 +39,15 @@ class Base_CP(BaseTensorDecomposition):
             String defining which init scheme to use. Must be 'random' (default) or 'svd'
 
         """
-        if init_scheme == 'random':
+        if init_scheme == "random":
             factors = self._random_init(tensor, rank)
-        elif init_scheme == 'svd':
+        elif init_scheme == "svd":
             factors = self._svd_init(tensor, rank)
         else:
-            raise ValueError(f'Unknown init_scheme "{init_scheme}", use "svd" or "random"')
-    
+            raise ValueError(
+                f'Unknown init_scheme "{init_scheme}", use "svd" or "random"'
+            )
+
         weights = np.ones((len(tensor.shape), rank))
         return [utils.normalize_factor(f)[0] for f in factors], weights
 
@@ -93,10 +96,10 @@ class Base_CP(BaseTensorDecomposition):
             the input tensor
         """
         n_modes = len(tensor.shape)
-        factors =[]
+        factors = []
         for i in range(n_modes):
-            u, s, vh = np.linalg.svd(base.unfold(tensor,i))
-            factors.append(u[:,:rank])
+            u, s, vh = np.linalg.svd(base.unfold(tensor, i))
+            factors.append(u[:, :rank])
         return factors
 
     def compute_loss(self, tensor, rank):
@@ -104,6 +107,7 @@ class Base_CP(BaseTensorDecomposition):
 
     def compose_from_factors(self, factors):
         pass
+
 
 class CP_als(Base_CP):
     def __init__(self, rank, init_scheme, max_it, tol):
@@ -117,4 +121,3 @@ class CP_als(Base_CP):
 
     def decompose(self, tensor):
         pass
-    
