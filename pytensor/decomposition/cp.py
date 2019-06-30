@@ -5,12 +5,13 @@ import numpy as np
 from scipy.optimize import nnls
 
 from .base_decomposer import BaseDecomposer
+from . import decompositions
 from .. import base
 from ..utils import normalize_factors
 
 
 class BaseCP(BaseDecomposer):
-    DecompositionType = base.KruskalTensor
+    DecompositionType = decompositions.KruskalTensor
     def __init__(
         self,
         rank,
@@ -54,7 +55,7 @@ class BaseCP(BaseDecomposer):
 
             factor_matrices.append(u[:, :self.rank])
         
-        self.decomposition = base.KruskalTensor(factor_matrices)
+        self.decomposition = self.DecompositionType(factor_matrices)
  
     def _check_valid_components(self, decomposition):
         """Check if provided factor matrices have correct shape.
@@ -78,7 +79,7 @@ class BaseCP(BaseDecomposer):
 
         Arguments:
         ----------
-        initial_decompostion: pytensor.base.KruskalTensor or str (optional)
+        initial_decompostion: pytensor.decomposition.decompositions.KruskalTensor or str (optional)
             The initial KruskalTensor (init=precomputed) to use or the path of the 
             logfile to load (init=from_file).
         """
@@ -118,7 +119,7 @@ class BaseCP(BaseDecomposer):
             Ignored, included to follow sklearn standards.
         max_its : int (optional)
             If set, then this will override the class's max_its.
-        initial_decomposition : pytensor.base.KruskalTensor or str
+        initial_decomposition : pytensor.decomposition.decompositions.KruskalTensor or str
             The initial KruskalTensor (init=precomputed) to use or the path of the 
             logfile to load (init=from_file).
         """
@@ -225,6 +226,8 @@ class CP_ALS(BaseCP):
 
         new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
+
+        self.decomposition.reset_weights()
         self.decomposition.normalize_components()
 
     def _update_als_factors(self):

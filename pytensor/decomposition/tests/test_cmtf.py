@@ -5,7 +5,7 @@ import h5py
 import pytest
 import numpy as np
 from .. import cp
-from ... import base
+from .. import decompositions
 from ... import metrics
 from .. import cmtf
 
@@ -16,7 +16,7 @@ np.random.seed(0)
 class TestCMTFALS:
     @pytest.fixture
     def rank4_kruskal_tensor(self):
-        ktensor = base.KruskalTensor.random_init((30, 40, 50), rank=4)
+        ktensor = decompositions.KruskalTensor.random_init((30, 40, 50), rank=4)
         ktensor.normalize_components()
         return ktensor
 

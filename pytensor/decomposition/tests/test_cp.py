@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 from .test_utils import ensure_monotonicity
 from .. import cp
-from ... import base
+from .. import decompositions
 from ... import metrics
 # Husk: Test at weights og factors endres inplace
 
@@ -16,13 +16,13 @@ from ... import metrics
 class TestCPALS:
     @pytest.fixture
     def rank4_kruskal_tensor(self):
-        ktensor = base.KruskalTensor.random_init((30, 40, 50), rank=4)
+        ktensor = decompositions.KruskalTensor.random_init((30, 40, 50), rank=4)
         ktensor.normalize_components()
         return ktensor
 
     @pytest.fixture
     def nonnegative_rank4_kruskal_tensor(self):
-        ktensor = base.KruskalTensor.random_init((30, 40, 50), rank=4)
+        ktensor = decompositions.KruskalTensor.random_init((30, 40, 50), rank=4)
         ktensor.normalize_components()
         for i, fm in enumerate(ktensor.factor_matrices):
             ktensor.factor_matrices[i][...] = np.abs(fm)

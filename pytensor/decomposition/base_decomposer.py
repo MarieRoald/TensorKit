@@ -4,7 +4,7 @@ Contains the base class for all decomposition methods in PyTensor
 
 
 from abc import ABC, abstractmethod, abstractproperty
-from ..base import BaseDecomposedTensor
+from . import decompositions
 import numpy as np
 import h5py
 
@@ -13,7 +13,7 @@ __author__ = "Marie Roald & Yngve Mardal Moe"
 
 
 class BaseDecomposer(ABC):
-    DecompositionType = BaseDecomposedTensor
+    DecompositionType = decompositions.BaseDecomposedTensor
     @abstractmethod
     def __init__(
         self,

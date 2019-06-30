@@ -8,6 +8,7 @@ import h5py
 
 from .test_utils import ensure_monotonicity
 from .. import parafac2
+from .. import decompositions
 from ... import base
 from ... import metrics
 # Husk: Test at weights og factors endres inplace
@@ -16,7 +17,7 @@ from ... import metrics
 class TestParafac2ALS:
     @pytest.fixture
     def rank4_parafac2_tensor(self):
-        pf2tensor = base.Parafac2Tensor.random_init((30, 40, 50), rank=4)
+        pf2tensor = decompositions.Parafac2Tensor.random_init((30, 40, 50), rank=4)
         #pf2tensor.normalize_components()
         return pf2tensor
     

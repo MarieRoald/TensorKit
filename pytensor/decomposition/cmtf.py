@@ -8,7 +8,6 @@ from .. import base
 
 
 class CMTF_ALS(CP_ALS): 
-
     def store_checkpoint(self):
         #TODO: store the matrices as well
         with h5py.File(self.checkpoint_path, 'a') as h5:
@@ -108,7 +107,7 @@ class CMTF_ALS(CP_ALS):
             Ignored, included to follow sklearn standards.
         max_its : int (optional)
             If set, then this will override the class's max_its.
-        initial_decomposition : pytensor.base.KruskalTensor or str
+        initial_decomposition : pytensor.decomposition.decomposer.KruskalTensor or str
             The initial KruskalTensor (init=precomputed) to use or the path of the 
             logfile to load (init=from_file).
         """

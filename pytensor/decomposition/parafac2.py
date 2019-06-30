@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import numpy as np
 from .base_decomposer import BaseDecomposer
+from . import decompositions
 from . import cp
 from ..utils import normalize_factors, get_pca_loadings
 from .. import base
@@ -11,7 +12,7 @@ class BaseParafac2(BaseDecomposer):
     TODO: Ikke tillat at evolve_mode og evolve_over settes manuelt
     TODO: Evolve_mode=2, evolve_over=0
     """
-    DecompositionType = base.Parafac2Tensor
+    DecompositionType = decompositions.Parafac2Tensor
     def __init__(self, 
         rank, 
         max_its, 
@@ -41,7 +42,7 @@ class BaseParafac2(BaseDecomposer):
     def init_random(self):
         """Random initialisation of the factor matrices
         """
-        self.decomposition = base.Parafac2Tensor.random_init(self.X_shape, rank=self.rank)
+        self.decomposition = self.DecompositionType.random_init(self.X_shape, rank=self.rank)
 
     def init_svd(self):
         """SVD initalisation
@@ -59,7 +60,7 @@ class BaseParafac2(BaseDecomposer):
         C = np.ones((K, self.rank))
 
         P = np.eye(J, self.rank)
-        self.decomposition = base.Parafac2Tensor(A, blueprint_B, C, P)
+        self.decomposition = self.DecompositionType(A, blueprint_B, C, P)
 
         self._update_projection_matrices()
 
@@ -150,6 +151,7 @@ class BaseParafac2(BaseDecomposer):
             projected_X[..., k] = self.X[k]@projection_matrix
         return projected_X
 
+    # Todo: Change name of this function
     def _update_projection_matrices(self):
         K = self.X_shape[2]
 
@@ -212,7 +214,7 @@ class Parafac2_ALS(BaseParafac2):
         self._rel_function_change = np.inf
 
     def _prepare_cp_decomposer(self):
-        self.cp_decomposition = base.KruskalTensor([self.decomposition.A, self.decomposition.blueprint_B, self.decomposition.C])
+        self.cp_decomposition = decompositions.KruskalTensor([self.decomposition.A, self.decomposition.blueprint_B, self.decomposition.C])
         self.cp_decomposer = cp.CP_ALS(self.rank, max_its=1000, 
                                        convergence_tol=0, print_frequency=-1, 
                                        non_negativity_constraints=self.non_negativity_constraints,
