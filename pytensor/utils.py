@@ -4,6 +4,20 @@ from . import base
 from . import cp_old as cp
 
 
+def flip_factors(factor_matrices):
+    factor_matrices = deepcopy(factor_matrices)
+    signs = []
+    for i, factor in enumerate(factor_matrices):
+        sign = np.sign(np.mean(np.sign(factor), axis=0))
+
+        # Resolve zero-signs so they are equal to sign of first nonzero element
+        for k, s in enumerate(sign):
+            if s == 0:
+                sign[k] = _find_first_nonzero_sign(factor[:, k])
+
+        factor_matrices[i] *= sign
+        signs.append(sign)
+    return factor_matrices, signs
 
 
 def get_pca_loadings(Y, rank):
