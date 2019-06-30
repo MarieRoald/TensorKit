@@ -19,6 +19,7 @@ Setup file is coming. Currently, you will have to download the repo and add it t
 
 Below is an example where we create a random Kruskal tensor and decompose it using the CP decomposition.
 
+```python
     import numpy as np
     from pytensor.decomposition import decompositions
     from pytensor.decomposition.cp import CP_ALS
@@ -42,3 +43,4 @@ Below is an example where we create a random Kruskal tensor and decompose it usi
     # Evaluate performance
     fms, permutation = random_tensor.factor_match_score(learned_decomposition)
     print(f'The factor match score is {fms:.3e} and the factor permutation is {permutation}')
+```
