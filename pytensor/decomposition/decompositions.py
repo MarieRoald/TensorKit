@@ -2,6 +2,7 @@ import numpy as np
 import h5py
 from abc import ABC, abstractmethod, abstractclassmethod
 from .. import base
+from .. import metrics
 
 
 class BaseDecomposedTensor(ABC):
@@ -155,12 +156,13 @@ class KruskalTensor(BaseDecomposedTensor):
     def __getitem__(self, item):
         return self.factor_matrices[item]
 
-    def _factor_match_score(self, decomposition, weight_penalty=True, absolute_value=True):
-        assert decomposition.rank == rank
-        
-        for k in range(rank):
-            
-            pass
+    def factor_match_score(self, decomposition, weight_penalty=True, fms_reduction='min'):
+        assert decomposition.rank == self.rank
+
+        return metrics.factor_match_score(self.factor_matrices, 
+                                          decomposition.factor_matrices, 
+                                          weight_penalty=weight_penalty, 
+                                          fms_reduction=fms_reduction)
 
 
 class EvolvingTensor(BaseDecomposedTensor):
@@ -425,3 +427,14 @@ class Parafac2Tensor(EvolvingTensor):
         ]
 
         return cls(A, blueprint_B, C, projection_matrices, warning=warning)
+
+    def factor_match_score(self, decomposition, weight_penalty=True, fms_reduction='min'):
+        assert decomposition.rank == self.rank
+
+        factors1 = [self.A, np.array(self.B).reshape(-1, self.rank), self.C]
+        factors2 = [decomposition.A, np.array(decomposition.B).reshape(-1, self.rank), decomposition.C]
+
+        return metrics.factor_match_score(factors1, 
+                                          factors2, 
+                                          weight_penalty=weight_penalty, 
+                                          fms_reduction=fms_reduction)
