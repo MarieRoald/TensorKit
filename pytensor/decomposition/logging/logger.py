@@ -60,7 +60,7 @@ class BaseLogger(ABC):
 
 class LossLogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_metrics.append(decomposer.loss())
+        self.log_metrics.append(decomposer.loss)
 
 class MSELogger(BaseLogger):
     def _log(self, decomposer):

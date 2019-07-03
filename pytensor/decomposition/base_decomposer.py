@@ -74,7 +74,7 @@ class BaseDecomposer(ABC):
 
     # TODO: Property?
     # TODO: Hvis det blir property, fiks logger!
-    @abstractmethod
+    @abstractproperty
     def loss(self):
         pass
    

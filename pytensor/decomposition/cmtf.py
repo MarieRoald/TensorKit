@@ -54,6 +54,7 @@ class CMTF_ALS(CP_ALS):
     def RMSE(self):
         return np.sqrt(self.MSE)
 
+    @property
     def loss(self):
         return self.SSE  # TODO: skal det være property?
 
@@ -209,11 +210,11 @@ class CMTF_ALS(CP_ALS):
                 iteration: {self.current_iteration}
                 V weigths: {self.coupled_weights}
                 weights: {self.weights}
-                loss: {self.loss()}
+                loss: {self.loss}
                 tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2}
                 Y loss {self.coupled_factor_matrices_SSE}
             """)
-            _loss = self.loss()
+            _loss = self.loss
         
 
 
@@ -275,11 +276,11 @@ class CMTF_ALS(CP_ALS):
         if debug:
             debugstring += dedent(f"""\
             end of update als factor (mode {mode})
-                loss: {self.loss()})
+                loss: {self.loss})
                 tensor loss: {np.linalg.norm(self.X - self.reconstructed_X)**2})
                 Y loss: {self.coupled_factor_matrices_SSE}""")
 
-            if self.loss() > _loss:
+            if self.loss > _loss:
                 print(debugstring)
             
     
