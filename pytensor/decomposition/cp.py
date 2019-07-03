@@ -268,9 +268,6 @@ class CP_ALS(BaseCP):
 
             self._after_fit_iteration()
 
-        if self.ridge_penalties is None:
-            self.decomposition.normalize_components()
-
         if (it+1) % self.checkpoint_frequency != 0:
             self.store_checkpoint()
 
