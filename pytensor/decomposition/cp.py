@@ -20,7 +20,8 @@ class BaseCP(BaseDecomposer):
         init='random',
         loggers=None,
         checkpoint_frequency=None,
-        checkpoint_path=None
+        checkpoint_path=None,
+        ridge_penalties=None,
     ):
         super().__init__(
             loggers=loggers,
@@ -31,6 +32,7 @@ class BaseCP(BaseDecomposer):
         self.max_its = max_its
         self.convergence_tol = convergence_tol
         self.init = init
+        self.ridge_penalties = ridge_penalties
 
     def init_random(self):
         """Random initialisation of the factor matrices.
@@ -148,8 +150,13 @@ class BaseCP(BaseDecomposer):
         self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition)
         return self.decomposition
 
+    @property
     def loss(self):
-        return self.SSE #TODO: skal det være property?
+        loss = self.SSE #TODO: skal det være property?
+        if self.ridge_penalties is not None:
+            for ridge, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
+                loss += ridge*np.linalg.norm(factor_matrix)**2
+        return loss
    
     def _fit(self):
         return 1 - self.SSE/(self.X_norm**2)
@@ -181,7 +188,8 @@ class CP_ALS(BaseCP):
         checkpoint_frequency=None,
         checkpoint_path=None,
         print_frequency=10,
-        non_negativity_constraints=None
+        non_negativity_constraints=None,
+        ridge_penalties=None
     ):
         super().__init__(
             rank=rank,
@@ -190,13 +198,18 @@ class CP_ALS(BaseCP):
             init=init,
             loggers=loggers,
             checkpoint_frequency=checkpoint_frequency,
-            checkpoint_path=checkpoint_path
+            checkpoint_path=checkpoint_path,
+            ridge_penalties=ridge_penalties
         )
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
+        self.decomposition.reset_weights()
+        if self.non_negativity_constraints is None:
+            self.non_negativity_constraints = [False]*len(self.factor_matrices)
+
         self._rel_function_change = np.inf
         self.prev_SSE = self.SSE
 
@@ -213,9 +226,14 @@ class CP_ALS(BaseCP):
         return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
 
     def _get_rightsolve(self, mode):
+        rightsolve = base.rightsolve
         if self.non_negativity_constraints[mode]:
-            return base.non_negative_rightsolve
-        return base.rightsolve
+            rightsolve = base.non_negative_rightsolve
+        
+        if self.ridge_penalties is not None:
+            rightsolve = base.add_rightsolve_ridge(rightsolve, self.ridge_penalties[mode])
+
+        return rightsolve
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode."""
@@ -226,9 +244,6 @@ class CP_ALS(BaseCP):
 
         new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
-
-        self.decomposition.reset_weights()
-        self.decomposition.normalize_components()
 
     def _update_als_factors(self):
         """Updates factors with alternating least squares."""
@@ -243,21 +258,19 @@ class CP_ALS(BaseCP):
     def _fit(self):
         """Fit a CP model with Alternating Least Squares.
         """
-        # TODO: logger?
-
-        if self.non_negativity_constraints is None:
-            self.non_negativity_constraints = [False]*len(self.factor_matrices)
-
         for it in range(self.max_its):
             if abs(self._rel_function_change) < self.convergence_tol:
                 break
             self._update_als_factors()
             self._update_convergence()
             if it % self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'    {it}: The MSE is {self.MSE:4g}, f is {self.loss():4g}, improvement is {self._rel_function_change:4g}')
+                print(f'    {it}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, improvement is {self._rel_function_change:4g}')
 
             self._after_fit_iteration()
-        
+
+        if self.ridge_penalties is None:
+            self.decomposition.normalize_components()
+
         if (it+1) % self.checkpoint_frequency != 0:
             self.store_checkpoint()
 

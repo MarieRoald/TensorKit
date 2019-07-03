@@ -27,6 +27,23 @@ def non_negative_rightsolve(A, B):
     return x
 
 
+def add_rightsolve_ridge(rightsolve, ridge_penalty):
+    def ridge_rightsolve(A, B):
+        n, m = A.shape
+        p, q = B.shape
+        A_ = np.concatenate(
+            [A, np.sqrt(ridge_penalty)*np.identity(n)],
+            axis=1
+        )
+        B_ = np.concatenate(
+            [B, np.zeros((p, n))],
+            axis=1
+        )
+
+        return rightsolve(A_, B_)
+    return ridge_rightsolve
+
+
 def kron_binary_vectors(u, v):
     """Efficient Kronecker product between two vectors.
     """
