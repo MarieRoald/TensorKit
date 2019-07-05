@@ -155,6 +155,10 @@ class BaseCP(BaseDecomposer):
         loss = self.SSE #TODO: skal det være property?
         if self.ridge_penalties is not None:
             for ridge, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
+                print('loss')
+                print(ridge)
+                print(np.prod(factor_matrix.shape))
+                ridge /= np.prod(factor_matrix.shape)
                 loss += ridge*np.linalg.norm(factor_matrix)**2
         return loss
    
@@ -231,7 +235,12 @@ class CP_ALS(BaseCP):
             rightsolve = base.non_negative_rightsolve
         
         if self.ridge_penalties is not None:
-            rightsolve = base.add_rightsolve_ridge(rightsolve, self.ridge_penalties[mode])
+            ridge_penalty = self.ridge_penalties[mode]
+            fm_shape = np.prod(self.factor_matrices[mode].shape)
+            print('get rightsolve', mode)
+            print(ridge_penalty)
+            print(fm_shape)
+            rightsolve = base.add_rightsolve_ridge(rightsolve, ridge_penalty/fm_shape)
 
         return rightsolve
 
@@ -250,6 +259,35 @@ class CP_ALS(BaseCP):
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
             self._update_als_factor(mode)
+
+    def _update_als_factors_ls(self):
+        # compute alle f_new
+        self.new_factor_matrices = []
+
+        for mode, new_factor in self.new_factor_matrices:
+            new_factor[mode][...] = self.new_step(self.factor_matrices[mode], 
+                                                  self.prev_factor_matrices[mode], 
+                                                  self.step_length)
+
+        new_loss = 1
+        curr_loss = 1
+
+        if new_loss < curr_loss:
+            self.factor_matrices[mode] = new_factor
+
+        for mode in range(num_modes):
+            self._update_als_factor(mode)
+
+        
+
+
+        # compute loss_new
+
+
+        # update factors
+
+        # store old factors?
+        pass
     
     def _update_convergence(self):
         self._rel_function_change = (self.prev_SSE - self.SSE)/self.prev_SSE
