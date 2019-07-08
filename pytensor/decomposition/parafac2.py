@@ -116,7 +116,6 @@ class BaseParafac2(BaseDecomposer):
         self._fit()
 
     def fit_transform(self, X, y=None, max_its=None, initial_decomposition=None):
-        #TODO: finish this
         self.fit(X, y=None, max_its=None, initial_decomposition=None)
         return self.decomposition
 
@@ -222,7 +221,6 @@ class Parafac2_ALS(BaseParafac2):
         self.cp_decomposer._init_fit(X=self.projected_X, max_its=np.inf, initial_decomposition=self.cp_decomposition)
 
     def _fit(self):
-        # TODO: logger?
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False, False, False]
 
@@ -235,7 +233,7 @@ class Parafac2_ALS(BaseParafac2):
             self._update_convergence()
 
             if it% self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'{it:6}: The MSE is {self.MSE: 4g}, f is {self.loss:4g}, '
+                print(f'{it:6d}: The MSE is {self.MSE:4g}, f is {self.loss():4g}, '
                       f'improvement is {self._rel_function_change:g}')
 
             self._after_fit_iteration()
@@ -259,9 +257,7 @@ class Parafac2_ALS(BaseParafac2):
         #print('Before ALS update') 
         #print(f'The MSE is {self.MSE: 4f}, f is {self.loss:4f}')
 
-        # TODO: Hva gjør jeg med PX?
         self.cp_decomposer.set_target(self.projected_X)
-        #self.cp_decomposer.set_target(ny_X)?
         self.cp_decomposer._update_als_factors()
         self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
         self.cp_decomposition.weights = self.cp_decomposition.weights*0 + 1
