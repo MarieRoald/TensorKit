@@ -114,19 +114,18 @@ def core_consistency(X, A, B, C, normalized=False):
 
 
 
-def core_consistency_parafac2(X, P_k, F, A, D_k, rank):
+def core_consistency_parafac2(X, P_k, A, F, C, rank):
+    rank = F.shape[1]
+    I = A.shape[0]
+    K = C.shape[0]
+    projected_X = np.empty((I, rank, K))
 
-    rank = F.shape[0]
-    K = len(X) #TOOD: check if X is list or tensor
-    J = X[0].shape[1]
+    for k, projection_matrix in enumerate(P_k):
+        projected_X[..., k] = X[k]@projection_matrix
 
-    X_hat = np.empty((rank, J, K))
+    return core_consistency(projected_X, A, F, C)
 
-    for k in range(K):
-        X_hat[..., k] = P_k[k].T @ X[k]
 
-    C = np.diagonal(D_k)
-    return core_consistency(X_hat, F, A, C)
 
 def calculate_core_consistencies(X, upper_rank=5):
     core_consistencies = []
