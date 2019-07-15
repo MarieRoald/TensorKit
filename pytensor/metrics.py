@@ -114,7 +114,7 @@ def core_consistency(X, A, B, C, normalized=False):
 
 
 
-def core_consistency_parafac2(X, P_k, A, F, C, rank):
+def core_consistency_parafac2(X, P_k, A, F, C):
     rank = F.shape[1]
     I = A.shape[0]
     K = C.shape[0]
