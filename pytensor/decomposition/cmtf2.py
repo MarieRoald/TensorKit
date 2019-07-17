@@ -95,3 +95,18 @@ class CMTF_ALS(CP_ALS):
             return np.concatenate([unfolded_X, coupled_Y], axis=1)
         else:
             return super()._get_als_rhs(mode)
+
+    def _update_uncoupled_matrix_factors(self):
+        for i, mode in enumerate(self.coupling_modes):
+            lhs = self.factor_matrices[mode].T
+            rhs = self.coupled_matrices[i].T
+
+            if self.non_negativity_constraints is None:
+                self.uncoupled_factor_matrices[cm_idx][...] = base.rightsolve(lhs, rhs)
+
+            if self.non_negativity_constraints[mode]:
+                new_fm = base.non_negative_rightsolve(lhs, rhs)
+                self.uncoupled_factor_matrices[cm_idx][...] = new_fm
+            else:
+                self.uncoupled_factor_matrices[cm_idx][...] = base.rightsolve(lhs, rhs)
+
