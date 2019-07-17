@@ -8,9 +8,33 @@ from .. import base
 
 class CMTF_ALS(CP_ALS):
     DecompositionType = decompositions.CoupledTensors
+    @property
+    def SSE(self):
+        """Sum Squared Error"""
+        # TODO: Cache result
+        return np.linalg.norm(self.X - self.reconstructed_X)**2 + self.coupled_factor_matrices_SSE
 
     @property
-    def coupled_matrices(self):
+    def MSE(self):
+        #raise NotImplementedError('Not implemented') 
+        # TODO: fix this
+        num_elements = np.prod(self.X.shape) + sum(np.prod(Yi.shape) for Yi in self.coupled_factor_matrices)
+        return self.SSE/num_elements
+
+    @property
+    def coupled_factor_matrices_SSE(self):
+        SSE = 0
+
+        for Y, reconstructed_Y in zip(self.coupled_matrices, self.reconstructed_coupled_matrices):
+            SSE += np.linalg.norm(Y - reconstructed_Y)**2
+        return SSE
+
+    @property
+    def RMSE(self):
+        return np.sqrt(self.MSE)
+
+    @property
+    def reconstructed_coupled_matrices(self):
         return self.decomposition.construct_matrices()
 
     @property
@@ -27,9 +51,11 @@ class CMTF_ALS(CP_ALS):
 
     def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None):
         self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its)
-        
+        return self.decomposition
+
     def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None):
         self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None)
+        super()._fit()
 
     def init_random(self):
         """Random initialisation of the factor matrices.
@@ -41,10 +67,8 @@ class CMTF_ALS(CP_ALS):
     def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None):
         self.decomposition = self.DecompositionType.random_init(tensor_sizes=X.shape, rank=self.rank,
             matrices_sizes=[mat.shape for mat in coupled_matrices],coupling_modes=coupling_modes)
-        self.couplings = coupled_matrices
+        self.coupled_matrices = coupled_matrices
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self._rel_function_change = np.inf
-        self.prev_SSE = self.SSE
         
     def _update_als_factors(self):
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
@@ -102,11 +126,11 @@ class CMTF_ALS(CP_ALS):
             rhs = self.coupled_matrices[i].T
 
             if self.non_negativity_constraints is None:
-                self.uncoupled_factor_matrices[cm_idx][...] = base.rightsolve(lhs, rhs)
+                self.uncoupled_factor_matrices[i][...] = base.rightsolve(lhs, rhs)
 
             if self.non_negativity_constraints[mode]:
                 new_fm = base.non_negative_rightsolve(lhs, rhs)
-                self.uncoupled_factor_matrices[cm_idx][...] = new_fm
+                self.uncoupled_factor_matrices[i][...] = new_fm
             else:
-                self.uncoupled_factor_matrices[cm_idx][...] = base.rightsolve(lhs, rhs)
+                self.uncoupled_factor_matrices[i][...] = base.rightsolve(lhs, rhs)
 
