@@ -438,3 +438,117 @@ class Parafac2Tensor(EvolvingTensor):
                                           factors2, 
                                           weight_penalty=weight_penalty, 
                                           fms_reduction=fms_reduction)
+
+
+class CoupledTensors(BaseDecomposedTensor):
+    def __init__(self, tensor_factors, matrices_factors, coupling_modes, weights=None):
+        # tensor: the tensor-factors to be coupled, matrices: nested list of matrix-factors to couple, coupling_modes: list of modes
+        # if len(matrices) != len(coupling_modes), error!
+        self.rank = tensor_factors[0].shape[1]
+        for i in range(len(coupling_modes)):
+            self.verify_coupling(
+                tensor_factors, matrices_factors, coupling_modes[i])
+        self.weights = np.ones(self.rank + len(matrices_factors)) if weights is None else weights
+        self.factor_matrices = tensor_factors
+        self.matrices_factors = matrices_factors
+        self.coupling_modes = coupling_modes
+        self.coupled_factor_matrices = [mf[0] for mf in matrices_factors]
+        self.uncoupled_factor_matrices = [mf[1] for mf in matrices_factors]
+
+
+    
+    def construct_tensor(self):
+        shape = [f.shape[0] for f in self.factor_matrices]
+        tensor = (self.weights[:3][np.newaxis] * self.factor_matrices[0]
+                  ) @ base.khatri_rao(*self.factor_matrices[1:]).T
+
+        return base.fold(tensor, 0, shape=shape)
+
+    def construct_matrices(self):
+        matrices = []
+        for cfm, ucfm in zip(self.coupled_factor_matrices, self.uncoupled_factor_matrices):
+            matrices.append(cfm @ ucfm.T)
+        return matrices
+
+    def reset_weights(self):
+        self.weights *= 0
+        self.weights += 1
+
+    def normalize_components(self, update_weights=True, eps=1e-15):
+        """Set all factor matrices to unit length. Updates the weights if `update_weights` is True.
+
+        Arguments:
+        ----------
+        update_weights : bool
+            If true, then the weights of this Kruskal tensor will be set to the product of the
+            component norms.
+        """
+        for i, factor_matrix in enumerate(self.factor_matrices):
+            norms = np.linalg.norm(factor_matrix, axis=0)
+            self.factor_matrices[i][...] = factor_matrix / (norms[np.newaxis] + eps)
+            if update_weights:
+                self.weights *= norms
+
+        for i, factor_matrix in enumerate(self.coupled_factor_matrices):
+            
+            norms = np.linalg.norm(factor_matrix, axis=0)
+            self.coupled_factor_matrices[i][...] = factor_matrix / \
+                (norms[np.newaxis] + eps)
+            if update_weights:
+                self.weights *= norms
+
+        for i, factor_matrix in enumerate(self.uncoupled_factor_matrices):
+            
+            norms = np.linalg.norm(factor_matrix, axis=0)
+            self.uncoupled_factor_matrices[i][...] = factor_matrix / \
+                (norms[np.newaxis] + eps)
+            if update_weights:
+                self.weights *= norms
+
+        return self
+
+    @classmethod
+    def random_init(cls, tensor_sizes, rank, matrices_sizes, coupling_modes, random_method='normal'):
+        """Construct a random Kruskal tensor coupled with n matrices, all with unit vectors as components and unit weights.
+        """
+       # check that modes are correct
+        for i, size in enumerate(matrices_sizes):
+            if size[0] != tensor_sizes[coupling_modes[i]]:
+                print(size, tensor_sizes[coupling_modes[i]])
+                raise ValueError('The coupling is not right.')
+
+        if random_method.lower() == 'normal':
+            matrices_factors = [[np.random.randn(size[0], rank), 
+                np.random.randn(size[1], rank)] for size in matrices_sizes]
+            tensor_factors=[np.random.randn(size, rank)
+                                            for size in tensor_sizes]
+        elif random_method.lower() == 'uniform':
+            matrices_factors = [[np.random.uniform(size=(size[0], rank)), 
+                np.random.uniform(size=(size[1], rank))] for size in matrices_sizes]
+            tensor_factors=[np.random.uniform(
+                size = (size, rank)) for size in tensor_sizes]
+        else:
+           raise ValueError(
+               "`random_method` must be either 'normal' or 'uniform'")
+
+        return cls(tensor_factors, matrices_factors, coupling_modes).normalize_components(update_weights=False)
+
+    @property
+    def shapes(self):
+        return [fm.shape[0] for fm in self.factor_matrices], [fm.shape for fm in self.matrices_factors]
+
+    def verify_coupling(self, tensor_1, tensor_2, mode):
+        pass
+
+    def __getitem__(self, item):
+        return self.factor_matrices + self.matrices_factors
+
+    def load_from_hdf5_group(self, cls, group):
+        pass
+    def store_in_hdf5_group(self, group):
+        self._prepare_hdf5_group(group)
+        group.attrs['tensor_factor_matrices'] = len(self.factor_matrices)
+        group.attrs['rank'] = self.rank
+        group.attrs['coupled_matrices_factors'] = 2*len(self.matrices_factors)
+        group['weights'] = self.weights
+        pass
