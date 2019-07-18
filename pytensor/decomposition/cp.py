@@ -110,7 +110,7 @@ class BaseCP(BaseDecomposer):
     def _fit(self):
         pass
 
-    def fit(self, X, y=None, *, max_its=None, initial_decomposition=None):
+    def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, impute_missing_axis=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
 
         Arguments:
@@ -126,11 +126,11 @@ class BaseCP(BaseDecomposer):
             logfile to load (init=from_file).
         """
         self._init_fit(
-            X=X, max_its=max_its, initial_decomposition=initial_decomposition
+            X=X, max_its=max_its, initial_decomposition=initial_decomposition, impute_missing_axis=impute_missing_axis
         )
         self._fit()
 
-    def fit_transform(self, X, y=None, *, max_its=None, initial_decomposition=None):
+    def fit_transform(self, X, y=None, *, max_its=None, initial_decomposition=None, impute_missing_axis=None):
         """Fit a CP model and return kruskal tensor. 
         
         Precomputed components must be specified if init method is `precomputed`.
@@ -147,7 +147,7 @@ class BaseCP(BaseDecomposer):
             A tuple parametrising a Kruskal tensor.
             The first element is a list of factor matrices and the second element is an array containing the weights.
         """
-        self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition)
+        self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition, impute_missing_axis=impute_missing_axis)
         return self.decomposition
 
     @property
@@ -208,9 +208,14 @@ class CP_ALS(BaseCP):
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
 
-    def _init_fit(self, X, max_its, initial_decomposition):
+    def _init_fit(self, X, max_its, initial_decomposition, impute_missing_axis=None):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.decomposition.reset_weights()
+        if impute_missing_axis is not None:
+            self.M = np.ones(X.shape)
+            inds = np.where(np.isnan(X))
+            self.M[inds] = 0
+            self._init_impute_missing(impute_missing_axis)
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False]*len(self.factor_matrices)
 
@@ -226,6 +231,22 @@ class CP_ALS(BaseCP):
             V *= factor.T @ factor
         return V
     
+    def _init_impute_missing(self, axis):
+        #TODO: generalise to higher dimensions.
+        C = np.copy(self.X)
+        nan_locs = np.where(np.isnan(self.X))
+        for i, j, k in zip(nan_locs[0], nan_locs[1], nan_locs[2]):
+            if axis == 0:
+                C[i, j, k] = np.nanmean(self.X[:, j, k])
+            elif axis == 1:
+                C[i, j, k] = np.nanmean(self.X[i,:, k])
+            elif axis == 2:
+                C[i, j, k] = np.nanmean(self.X[i, j, :])
+        self.X = np.copy(C)
+        
+    def _set_new_X(self):
+        self.X = self.X * self.M + self.decomposition.construct_tensor()*((np.ones(self.X.shape)) - self.M)
+
     def _get_als_rhs(self, mode):
         return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
 
@@ -303,7 +324,8 @@ class CP_ALS(BaseCP):
             self._update_convergence()
             if it % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'    {it}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, improvement is {self._rel_function_change:4g}')
-
+            if self.M is not None:
+                self._set_new_X()
             self._after_fit_iteration()
 
         if (it+1) % self.checkpoint_frequency != 0:
