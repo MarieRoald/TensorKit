@@ -441,38 +441,42 @@ class Parafac2Tensor(EvolvingTensor):
 
 
 class CoupledTensors(BaseDecomposedTensor):
-    def __init__(self, tensor_factors, matrices_factors, coupling_modes, weights=None):
+    def __init__(self, tensor_factors, matrices_factors, coupling_modes, weights=None, mat_weights=None):
         # tensor: the tensor-factors to be coupled, matrices: nested list of matrix-factors to couple, coupling_modes: list of modes
         # if len(matrices) != len(coupling_modes), error!
         self.rank = tensor_factors[0].shape[1]
         for i in range(len(coupling_modes)):
             self.verify_coupling(
                 tensor_factors, matrices_factors, coupling_modes[i])
-        self.weights = np.ones(self.rank + len(matrices_factors)) if weights is None else weights
-        self.factor_matrices = tensor_factors
         self.matrices_factors = matrices_factors
         self.coupling_modes = coupling_modes
-        self.coupled_factor_matrices = [mf[0] for mf in matrices_factors]
         self.uncoupled_factor_matrices = [mf[1] for mf in matrices_factors]
-
-
+        self._create_kruskals(tensor_factors, weights=weights, mat_weights=mat_weights)
     
-    def construct_tensor(self):
-        shape = [f.shape[0] for f in self.factor_matrices]
-        tensor = (self.weights[:3][np.newaxis] * self.factor_matrices[0]
-                  ) @ base.khatri_rao(*self.factor_matrices[1:]).T
+    @property
+    def factor_matrices(self):
+        return self.tensor.factor_matrices
 
-        return base.fold(tensor, 0, shape=shape)
+    @property
+    def coupled_factor_matrices(self):
+        return [self.factor_matrices[i] for i in self.coupling_modes]
+
+    def _create_kruskals(self, tensor_factors, weights=None, mat_weights=None):
+        weights = np.ones(self.rank) if weights is None else weights
+        mat_weights = [np.ones(self.rank) for _ in range(len(self.coupling_modes))] if mat_weights is None else mat_weights
+        self.tensor = KruskalTensor(tensor_factors, weights=weights)
+        self.matrices = [KruskalTensor([tensor_factors[self.coupling_modes[i]], self.uncoupled_factor_matrices[i]],
+                    weights=mat_weights[i]) for i, mat in enumerate(self.uncoupled_factor_matrices)]
+
+    def construct_tensor(self):
+        return self.tensor.construct_tensor()
 
     def construct_matrices(self):
-        matrices = []
-        for cfm, ucfm in zip(self.coupled_factor_matrices, self.uncoupled_factor_matrices):
-            matrices.append(cfm @ ucfm.T)
-        return matrices
+        return [mat.construct_tensor() for mat in self.matrices]
 
     def reset_weights(self):
-        self.weights *= 0
-        self.weights += 1
+        for obj in [self.tensor] + self.matrices:
+            obj.reset_weights()
 
     def normalize_components(self, update_weights=True, eps=1e-15):
         """Set all factor matrices to unit length. Updates the weights if `update_weights` is True.
@@ -483,28 +487,8 @@ class CoupledTensors(BaseDecomposedTensor):
             If true, then the weights of this Kruskal tensor will be set to the product of the
             component norms.
         """
-        for i, factor_matrix in enumerate(self.factor_matrices):
-            norms = np.linalg.norm(factor_matrix, axis=0)
-            self.factor_matrices[i][...] = factor_matrix / (norms[np.newaxis] + eps)
-            if update_weights:
-                self.weights *= norms
-
-        for i, factor_matrix in enumerate(self.coupled_factor_matrices):
-            
-            norms = np.linalg.norm(factor_matrix, axis=0)
-            self.coupled_factor_matrices[i][...] = factor_matrix / \
-                (norms[np.newaxis] + eps)
-            if update_weights:
-                self.weights *= norms
-
-        for i, factor_matrix in enumerate(self.uncoupled_factor_matrices):
-            
-            norms = np.linalg.norm(factor_matrix, axis=0)
-            self.uncoupled_factor_matrices[i][...] = factor_matrix / \
-                (norms[np.newaxis] + eps)
-            if update_weights:
-                self.weights *= norms
-
+        for obj in [self.tensor] + self.matrices:
+            obj.normalize_components(update_weights=update_weights)
         return self
 
     @classmethod
@@ -550,5 +534,5 @@ class CoupledTensors(BaseDecomposedTensor):
         group.attrs['tensor_factor_matrices'] = len(self.factor_matrices)
         group.attrs['rank'] = self.rank
         group.attrs['coupled_matrices_factors'] = 2*len(self.matrices_factors)
-        group['weights'] = self.weights
+        group['weights'] = self.tensor.weights
         pass
