@@ -49,12 +49,12 @@ class CMTF_ALS(CP_ALS):
     def coupling_modes(self):
         return self.decomposition.coupling_modes
 
-    def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None, impute_missing_axis=None):
-        self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, impute_missing_axis=impute_missing_axis)
+    def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None, impute_missing_axis=None, impute_matrix_axis=None):
+        self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, impute_missing_axis=impute_missing_axis, impute_matrix_axis=impute_matrix_axis)
         return self.decomposition
 
-    def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, impute_missing_axis=None):
-        self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None,impute_missing_axis=impute_missing_axis)
+    def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, impute_missing_axis=None, impute_matrix_axis=None):
+        self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None, impute_missing_axis=impute_missing_axis, impute_matrix_axis=impute_matrix_axis)
         super()._fit()
 
     def init_random(self):
@@ -64,12 +64,32 @@ class CMTF_ALS(CP_ALS):
         """
         pass
 
-    def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None, impute_missing_axis=None):
+    def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None, impute_missing_axis=None, impute_matrix_axis=None):
         self.decomposition = self.DecompositionType.random_init(tensor_sizes=X.shape, rank=self.rank,
             matrices_sizes=[mat.shape for mat in coupled_matrices],coupling_modes=coupling_modes)
         self.coupled_matrices = coupled_matrices
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition, impute_missing_axis=impute_missing_axis)
-        
+        if impute_matrix_axis is not None:
+        #    mats_with_missing  = [mat for mat in coupled_matrices if np.isnan(mat).any()]
+            self.Ns = [np.ones(mat.shape) for mat in self.coupled_matrices]
+            for i, N in enumerate(self.Ns):
+                inds = np.where(np.isnan(self.coupled_matrices[i]))
+                self.Ns[i][inds] = 0
+            self._init_impute_matrices_missing(impute_matrix_axis)
+    
+    def _init_impute_matrices_missing(self, axis):
+        for i, mat in enumerate(self.coupled_matrices):
+            n = 0
+            if np.isnan(mat).any():
+                axis_means = np.nanmean(mat, axis=axis[n])    
+                inds = np.where(np.isnan(mat))  
+                self.coupled_matrices[i][inds] = np.take(axis_means, inds[1 if axis[n]==0 else 0])
+                n+=1
+
+    def _set_new_matrices(self):
+        for i, N in enumerate(self.Ns):
+            self.coupled_matrices[i] = self.coupled_matrices[i] * N + self.reconstructed_coupled_matrices[i] * (np.ones(shape=N.shape) - N)
+
     def _update_als_factors(self):
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
