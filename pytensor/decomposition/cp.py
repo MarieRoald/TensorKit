@@ -216,6 +216,8 @@ class CP_ALS(BaseCP):
             inds = np.where(np.isnan(X))
             self.M[inds] = 0
             self._init_impute_missing(impute_missing_axis)
+        else:
+            self.M = None
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False]*len(self.factor_matrices)
 
