@@ -237,3 +237,36 @@ class TestParafac2Tensor(TestEvolvingTensor):
 
         for Pk, lPk in zip(nonuniform_evolving_tensor.projection_matrices, loaded_tensor.projection_matrices):
             np.allclose(Pk, lPk)
+
+class TestCoupledTensors():
+    @pytest.fixture
+    def random_3mode_ktensor_and_matrices(self):
+        A = np.random.randn(30, 3)
+        B = np.random.randn(40, 3)
+        C = np.random.randn(50, 3)
+        
+        V1 = np.random.randn(50, 3)
+        V2 = np.random.randn(40, 3)
+        V3 = np.random.randn(80, 3)
+        V4 = np.random.randn(5, 3)
+
+        return decompositions.CoupledTensors([A, B, C], [[A, V1], [B, V2], [C, V3],[A, V4]], [0, 1, 2, 1])
+
+    def test_my_cat_has_aiiiiids(self, random_3mode_ktensor_and_matrices):
+        assert random_3mode_ktensor_and_matrices.coupling_modes == [0, 1, 2, 1]
+
+    def test_tensors_have_correct_shapes(self, random_3mode_ktensor_and_matrices):
+        assert random_3mode_ktensor_and_matrices.construct_tensor().shape == (30, 40, 50)
+        shapes = [(30, 50), (40, 40), (50, 80), (40, 5)]
+        for shape, mat in zip(shapes, random_3mode_ktensor_and_matrices.construct_matrices()):
+            assert mat.shape == shape
+        
+    def test_random_it(self, random_3mode_ktensor_and_matrices):
+        ctm = decompositions.CoupledTensors
+        with pytest.raises(ValueError):
+            ctm.random_init(tensor_sizes=(70, 30, 40), rank=3, matrices_sizes=[(70, 30), (60, 30)], coupling_modes=[0, 0])
+        ctm = ctm.random_init((70, 30, 40), 3, [(70, 30), (40, 80)], [0, 2], random_method='uniform')
+        assert ctm.construct_tensor().shape == (70, 30, 40)
+        assert ctm.coupling_modes == [0, 2]
+        for shape, mat in zip([(70, 30), (40, 80)], ctm.construct_matrices()):
+            assert mat.shape == shape
