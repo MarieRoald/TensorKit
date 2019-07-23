@@ -443,11 +443,9 @@ class Parafac2Tensor(EvolvingTensor):
 class CoupledTensors(BaseDecomposedTensor):
     def __init__(self, tensor_factors, matrices_factors, coupling_modes, weights=None, mat_weights=None):
         # tensor: the tensor-factors to be coupled, matrices: nested list of matrix-factors to couple, coupling_modes: list of modes
-        # if len(matrices) != len(coupling_modes), error!
+        if len(matrices_factors) != len(coupling_modes):
+            raise ValueError('Coupled matrices was {0} but coupling modes was {1}'.format(len(matrices_factors), len(coupling_modes)))
         self.rank = tensor_factors[0].shape[1]
-        for i in range(len(coupling_modes)):
-            self.verify_coupling(
-                tensor_factors, matrices_factors, coupling_modes[i])
         #self.matrices_factors = matrices_factors
         self.coupling_modes = coupling_modes
         self.uncoupled_factor_matrices = matrices_factors
@@ -519,8 +517,6 @@ class CoupledTensors(BaseDecomposedTensor):
     # def shapes(self):
     #     return [fm.shape[0] for fm in self.factor_matrices], [fm.shape for fm in self.matrices_factors]
 
-    def verify_coupling(self, tensor_1, tensor_2, mode):
-        pass
 
     def __getitem__(self, item):
         #return self.factor_matrices + self.matrices_factors
