@@ -465,7 +465,7 @@ class CoupledTensors(BaseDecomposedTensor):
         weights = np.ones(self.rank) if weights is None else weights
         mat_weights = [np.ones(self.rank) for _ in range(len(self.coupling_modes))] if mat_weights is None else mat_weights
         self.tensor = KruskalTensor(tensor_factors, weights=weights)
-        self.matrices = [KruskalTensor([tensor_factors[self.coupling_modes[i]], self.uncoupled_factor_matrices[i]],
+        self.matrices = [KruskalTensor([tensor_factors[self.coupling_modes[i]], mat],
                     weights=mat_weights[i]) for i, mat in enumerate(self.uncoupled_factor_matrices)]
 
     def construct_tensor(self):
@@ -506,8 +506,7 @@ class CoupledTensors(BaseDecomposedTensor):
             tensor_factors=[np.random.randn(size, rank)
                                             for size in tensor_sizes]
         elif random_method.lower() == 'uniform':
-            matrices_factors = [[np.random.uniform(size=(size[0], rank)), 
-                np.random.uniform(size=(size[1], rank))] for size in matrices_sizes]
+            matrices_factors = [np.random.uniform(size=(size[1], rank)) for size in matrices_sizes]
             tensor_factors=[np.random.uniform(
                 size = (size, rank)) for size in tensor_sizes]
         else:

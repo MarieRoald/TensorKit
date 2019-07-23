@@ -250,7 +250,7 @@ class TestCoupledTensors():
         V3 = np.random.randn(80, 3)
         V4 = np.random.randn(5, 3)
 
-        return decompositions.CoupledTensors([A, B, C], [[A, V1], [B, V2], [C, V3],[A, V4]], [0, 1, 2, 1])
+        return decompositions.CoupledTensors([A, B, C], [V1, V2, V3, V4], [0, 1, 2, 1])
 
     def test_my_cat_has_aiiiiids(self, random_3mode_ktensor_and_matrices):
         assert random_3mode_ktensor_and_matrices.coupling_modes == [0, 1, 2, 1]
