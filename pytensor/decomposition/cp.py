@@ -110,7 +110,7 @@ class BaseCP(BaseDecomposer):
     def _fit(self):
         pass
 
-    def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, impute_missing_axis=None):
+    def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, missing_values=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
 
         Arguments:
@@ -126,11 +126,11 @@ class BaseCP(BaseDecomposer):
             logfile to load (init=from_file).
         """
         self._init_fit(
-            X=X, max_its=max_its, initial_decomposition=initial_decomposition, impute_missing_axis=impute_missing_axis
+            X=X, max_its=max_its, initial_decomposition=initial_decomposition, missing_values=missing_values
         )
         self._fit()
 
-    def fit_transform(self, X, y=None, *, max_its=None, initial_decomposition=None, impute_missing_axis=None):
+    def fit_transform(self, X, y=None, *, max_its=None, initial_decomposition=None, missing_values=None):
         """Fit a CP model and return kruskal tensor. 
         
         Precomputed components must be specified if init method is `precomputed`.
@@ -147,7 +147,7 @@ class BaseCP(BaseDecomposer):
             A tuple parametrising a Kruskal tensor.
             The first element is a list of factor matrices and the second element is an array containing the weights.
         """
-        self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition, impute_missing_axis=impute_missing_axis)
+        self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition, missing_values=missing_values)
         return self.decomposition
 
     @property
@@ -208,14 +208,23 @@ class CP_ALS(BaseCP):
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
 
-    def _init_fit(self, X, max_its, initial_decomposition, impute_missing_axis=None):
+    def _init_fit(self, X, max_its, initial_decomposition, missing_values=None):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.decomposition.reset_weights()
-        if impute_missing_axis is not None:
-            self.M = np.ones(X.shape)
-            inds = np.where(np.isnan(X))
-            self.M[inds] = 0
-            self._init_impute_missing(impute_missing_axis)
+        if missing_values is not None:
+            if isinstance(missing_values, int):
+                self.M = np.ones(X.shape)
+                inds = np.where(np.isnan(X))
+                self.M[inds] = 0
+                self._init_impute_missing(missing_values)
+            elif isinstance(missing_values, tuple):
+                if all(isinstance(missing_values[i], (np.ndarray, list)) for i in range(self.rank)):
+                    self.M = np.ones(X.shape)
+                    self.M[missing_values] = 0
+                else:
+                    raise TypeError("Argument for missing values needs to be either axis to impute alon [int], or indexes of pre-computed missing values as tuples with array-likes")
+            else:
+                raise TypeError("Argument for missing values needs to be either axis to impute alon [int], or indexes of pre-computed missing values as tuples with array-likes")
         else:
             self.M = None
         if self.non_negativity_constraints is None:
