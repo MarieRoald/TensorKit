@@ -448,9 +448,9 @@ class CoupledTensors(BaseDecomposedTensor):
         for i in range(len(coupling_modes)):
             self.verify_coupling(
                 tensor_factors, matrices_factors, coupling_modes[i])
-        self.matrices_factors = matrices_factors
+        #self.matrices_factors = matrices_factors
         self.coupling_modes = coupling_modes
-        self.uncoupled_factor_matrices = [mf[1] for mf in matrices_factors]
+        self.uncoupled_factor_matrices = matrices_factors
         self._create_kruskals(tensor_factors, weights=weights, mat_weights=mat_weights)
     
     @property
@@ -502,8 +502,7 @@ class CoupledTensors(BaseDecomposedTensor):
                 raise ValueError('The coupling is not right.')
 
         if random_method.lower() == 'normal':
-            matrices_factors = [[np.random.randn(size[0], rank), 
-                np.random.randn(size[1], rank)] for size in matrices_sizes]
+            matrices_factors = [np.random.randn(size[1], rank) for size in matrices_sizes]
             tensor_factors=[np.random.randn(size, rank)
                                             for size in tensor_sizes]
         elif random_method.lower() == 'uniform':
@@ -517,22 +516,22 @@ class CoupledTensors(BaseDecomposedTensor):
 
         return cls(tensor_factors, matrices_factors, coupling_modes).normalize_components(update_weights=False)
 
-    @property
-    def shapes(self):
-        return [fm.shape[0] for fm in self.factor_matrices], [fm.shape for fm in self.matrices_factors]
+    # @property
+    # def shapes(self):
+    #     return [fm.shape[0] for fm in self.factor_matrices], [fm.shape for fm in self.matrices_factors]
 
     def verify_coupling(self, tensor_1, tensor_2, mode):
         pass
 
     def __getitem__(self, item):
-        return self.factor_matrices + self.matrices_factors
-
+        #return self.factor_matrices + self.matrices_factors
+        pass
     def load_from_hdf5_group(self, cls, group):
         pass
     def store_in_hdf5_group(self, group):
-        self._prepare_hdf5_group(group)
-        group.attrs['tensor_factor_matrices'] = len(self.factor_matrices)
-        group.attrs['rank'] = self.rank
-        group.attrs['coupled_matrices_factors'] = 2*len(self.matrices_factors)
-        group['weights'] = self.tensor.weights
+        # self._prepare_hdf5_group(group)
+        # group.attrs['tensor_factor_matrices'] = len(self.factor_matrices)
+        # group.attrs['rank'] = self.rank
+        # group.attrs['coupled_matrices_factors'] = 2*len(self.matrices_factors)
+        # group['weights'] = self.tensor.weights
         pass
