@@ -49,12 +49,12 @@ class CMTF_ALS(CP_ALS):
     def coupling_modes(self):
         return self.decomposition.coupling_modes
 
-    def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None, impute_missing_axis=None, impute_matrix_axis=None):
-        self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, impute_missing_axis=impute_missing_axis, impute_matrix_axis=impute_matrix_axis)
+    def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+        self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis)
         return self.decomposition
 
-    def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, impute_missing_axis=None, impute_matrix_axis=None):
-        self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None, impute_missing_axis=impute_missing_axis, impute_matrix_axis=impute_matrix_axis)
+    def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+        self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis)
         super()._fit()
 
     def init_random(self):
@@ -64,11 +64,11 @@ class CMTF_ALS(CP_ALS):
         """
         pass
 
-    def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None, impute_missing_axis=None, impute_matrix_axis=None):
+    def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
         self.decomposition = self.DecompositionType.random_init(tensor_sizes=X.shape, rank=self.rank,
             matrices_sizes=[mat.shape for mat in coupled_matrices],coupling_modes=coupling_modes)
         self.coupled_matrices = coupled_matrices
-        super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition, impute_missing_axis=impute_missing_axis)
+        super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition, missing_values=tensor_missing_values)
         if impute_matrix_axis is not None:
         #    mats_with_missing  = [mat for mat in coupled_matrices if np.isnan(mat).any()]
             self.Ns = [np.ones(mat.shape) for mat in self.coupled_matrices]
