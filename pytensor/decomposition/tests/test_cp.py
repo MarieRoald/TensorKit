@@ -102,4 +102,14 @@ class TestCPALS:
                 assert np.allclose(fm1, fm2)
             
             assert np.allclose(cp_als.decomposition.weights, cp_als2.decomposition.weights)
-        
+
+    def test_nan_imputation(self, rank4_kruskal_tensor):
+        X = rank4_kruskal_tensor.construct_tensor()
+        nan_inds = ([14, 20, 4], [28, 17, 0], [15, 44, 13])
+        X[nan_inds] = np.nan
+        row_means = np.nanmean(X, axis=(1))
+        true_means = row_means[(nan_inds[0], nan_inds[2])]
+        cp_als = cp.CP_ALS(4, max_its=100)
+        cp_als.X = X
+        cp_als._init_impute_missing(axis=1)
+        assert np.allclose(cp_als.X[nan_inds],true_means)
