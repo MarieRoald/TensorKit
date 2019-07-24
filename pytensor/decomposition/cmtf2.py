@@ -10,19 +10,39 @@ class CMTF_ALS(CP_ALS):
     DecompositionType = decompositions.CoupledTensors
     @property
     def SSE(self):
-        """Sum Squared Error"""
+        """Computes the sum squared error of the decomposition
+        
+        Returns
+        -------
+        float
+            Sum of squared error.
+        """
         # TODO: Cache result
-        return np.linalg.norm(self.X - self.reconstructed_X)**2 + self.coupled_factor_matrices_SSE
+        return np.linalg.norm(self.X - self.reconstructed_X)**2 + self.coupled_matrices_SSE
 
     @property
     def MSE(self):
+        """Computes the mean squared error of the decomposition.
+        
+        Returns
+        -------
+        float
+            Mean of squared error.
+        """
         #raise NotImplementedError('Not implemented') 
         # TODO: fix this
         num_elements = np.prod(self.X.shape) + sum(np.prod(Yi.shape) for Yi in self.coupled_factor_matrices)
         return self.SSE/num_elements
 
     @property
-    def coupled_factor_matrices_SSE(self):
+    def coupled_matrices_SSE(self):
+        """Computes total SSE for all coupled matrices.
+        
+        Returns
+        -------
+        float
+            SSE for couple matrices.
+        """
         SSE = 0
 
         for Y, reconstructed_Y in zip(self.coupled_matrices, self.reconstructed_coupled_matrices):
@@ -31,40 +51,134 @@ class CMTF_ALS(CP_ALS):
 
     @property
     def RMSE(self):
+        """        
+        Returns RMSE of the decomposition
+        """
         return np.sqrt(self.MSE)
 
     @property
     def reconstructed_coupled_matrices(self):
+        """        
+        Returns
+        -------
+        list(np.ndarray)
+            The coupled matrices.
+        """
         return self.decomposition.construct_matrices()
 
     @property
     def coupled_factor_matrices(self):
+        """[summary]
+        
+        Returns
+        -------
+        list(np.ndarray)
+            The coupled factor matrices.
+        """
         return self.decomposition.coupled_factor_matrices
 
     @property
     def uncoupled_factor_matrices(self):
+        """        
+        Returns
+        -------
+        list(np.ndarray)
+            The uncoupled factor matrices.
+        """
         return self.decomposition.uncoupled_factor_matrices
     
     @property
     def coupling_modes(self):
+        """        
+        Returns
+        -------
+        list(int)
+            The modes the matrices are coupled to the tensor along.
+        """
         return self.decomposition.coupling_modes
 
     def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+        """Executes coupled-tensor-matrix factorisation and returns the decomposition
+        
+        Parameters
+        ----------
+        X : np.ndarray
+            The n-dimensional tensor to fit, n>2.
+        coupled_matrices : list(np.ndarray)
+            The coupled matrices to fit.
+        coupling_modes : list(int)
+            Modes to couple along, must be ordered like coupled_matrices.
+        y : None
+            Ignored, included to follow sklearn standards.
+        max_its : int, optional
+            If set, then this will override the class's max_its
+        tensor_missing_values : int or tuple(np.ndarray), optional
+            Use if tensor has Nan-values. If int, imputes mean along the given axis.
+            If tuple(np.ndarray), assumes these indices to be pre-imputed Nans.
+        impute_matrix_axis : lis(int or None) optional
+            Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
+            Takes values in list and imputes means along the axis.
+        
+        Returns
+        -------
+        decompositions.CoupledTensors
+            The decomposed tensor and matrices.
+        """
         self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis)
         return self.decomposition
 
     def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+        """Fits a CMTF model. 
+        
+        Parameters
+        ----------
+        X : np.ndarray
+            The n-dimensional tensor to fit, n>2.
+        coupled_matrices : list(np.ndarray)
+            The coupled matrices to fit.
+        coupling_modes : list(int)
+            Modes to couple along, must be ordered like coupled_matrices.
+        y : None
+            Ignored, included to follow sklearn standards.
+        max_its : int, optional
+            If set, then this will override the class's max_its
+        tensor_missing_values : int or tuple(np.ndarray), optional
+            Use if tensor has Nan-values. If int, imputes mean along the given axis.
+            If tuple(np.ndarray), assumes these indices to be pre-imputed Nans.
+        impute_matrix_axis : lis(int or None) optional
+            Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
+            Takes values in list and imputes means along the axis.
+        """
         self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis)
         super()._fit()
 
     def init_random(self):
-        """Random initialisation of the factor matrices.
-
-        Each element of the factor matrices are taken from a standard normal distribution.
+        """Dummy function.
         """
         pass
 
     def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+        """Initialises the factorisation.
+        
+        Parameters
+        ----------
+        X : np.ndarray
+            The n-dimensional tensor to fit, n>2.
+        coupled_matrices : list(np.ndarray)
+            The coupled matrices to fit.
+        coupling_modes : list(int)
+            Modes to couple along, must be ordered like coupled_matrices.
+        initial_decomposition : None
+            Ignored, not implemented yet.
+        max_its : int, optional
+            If set, then this will override the class's max_its
+        tensor_missing_values : int or tuple(np.ndarray), optional
+            Use if tensor has Nan-values. If int, imputes mean along the given axis.
+            If tuple(np.ndarray), assumes these indices to be pre-imputed Nans.
+        impute_matrix_axis : lis(int or None) optional
+            Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
+            Takes values in list and imputes means along the axis.
+        """
         self.decomposition = self.DecompositionType.random_init(tensor_sizes=X.shape, rank=self.rank,
             matrices_sizes=[mat.shape for mat in coupled_matrices],coupling_modes=coupling_modes)
         self.coupled_matrices = coupled_matrices
@@ -78,19 +192,42 @@ class CMTF_ALS(CP_ALS):
             self._init_impute_matrices_missing(impute_matrix_axis)
     
     def _init_impute_matrices_missing(self, axis):
-        for i, mat in enumerate(self.coupled_matrices):
-            n = 0
-            if np.isnan(mat).any():
-                axis_means = np.nanmean(mat, axis=axis[n])    
-                inds = np.where(np.isnan(mat))  
-                self.coupled_matrices[i][inds] = np.take(axis_means, inds[1 if axis[n]==0 else 0])
-                n+=1
+        """Mean-imputes coupled matrices with missing values (np.nan).
+        
+        Parameters
+        ----------
+        axis : list(int)
+            The axes to impute a long. 
+        
+        Raises
+        ------
+        Exception
+            If the number of axes is different to the number of coupled matrices.
+        ValueError
+            If the list of axes contains different values from 0, 1 or None.
+        """
+        if len(axis) != len(self.coupled_matrices):
+            raise Exception("Number of matrices and axis must be the same."
+                            " Got {0} matrices and {1} axis. Axis must be list of 0, 1 or None."
+                            .format(len(self.coupled_matrices), len(axis)))
+        if not(all(ax == 0 or ax==1 for ax in axis)):
+                raise ValueError("Axis to impute along must all be either 0, 1 or None.")
+        for i, axis in enumerate(axis):
+            if axis is None:
+                continue
+            axis_means = np.nanmean(self.coupled_matrices[i], axis=axis)    
+            inds = np.where(np.isnan(self.coupled_matrices[i]))  
+            self.coupled_matrices[i][inds] = np.take(axis_means, inds[0 if axis==1 else 1])
 
     def _set_new_matrices(self):
+        """Updates the coupled matrices. Does nothing if original matrix did not have missing values.
+        """
         for i, N in enumerate(self.Ns):
             self.coupled_matrices[i] = self.coupled_matrices[i] * N + self.reconstructed_coupled_matrices[i] * (np.ones(shape=N.shape) - N)
 
     def _update_als_factors(self):
+        """Updates factors with alternating least squares.
+        """
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
             if self.non_negativity_constraints[mode]:
@@ -100,7 +237,8 @@ class CMTF_ALS(CP_ALS):
         self._update_uncoupled_matrix_factors()
 
     def _update_als_factor(self, mode):
-        """Solve least squares problem to get factor for one mode."""
+        """Solve least squares problem to get factor for one mode.
+        """
         lhs = self._get_als_lhs(mode)
         rhs = self._get_als_rhs(mode)
 
@@ -110,7 +248,8 @@ class CMTF_ALS(CP_ALS):
         self.factor_matrices[mode][...] = new_factor
 
     def _get_als_lhs(self, mode):
-        """Compute left hand side of least squares problem."""
+        """Compute left hand side of least squares problem.
+        """
         # TODO: make this nicer.
         if mode in self.coupling_modes:
             
@@ -126,6 +265,8 @@ class CMTF_ALS(CP_ALS):
             return super()._get_als_lhs(mode)
     
     def _get_als_rhs(self, mode):
+        """Compute right hand side of least squares problem.
+        """
         if mode in self.coupling_modes:
             unfolded_X = base.unfold(self.X, mode)
             n_couplings = self.coupling_modes.count(mode)
@@ -141,6 +282,8 @@ class CMTF_ALS(CP_ALS):
             return super()._get_als_rhs(mode)
 
     def _update_uncoupled_matrix_factors(self):
+        """Solve ALS problem for uncoupled factor matrices.
+        """
         for i, mode in enumerate(self.coupling_modes):
             lhs = self.factor_matrices[mode].T
             rhs = self.coupled_matrices[i].T
