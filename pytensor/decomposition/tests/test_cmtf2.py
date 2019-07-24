@@ -13,9 +13,15 @@ from .. import cmtf2
 # these tests take forever :thinking:
 class TestCMTF2ALS:
 
-    def test_nan_imputation(self):
-
-        pass
+    def test_matrix_missing_value_imputation(self):
+        Y1 = np.array([[1, np.nan, 5, np.nan, 9], [2, 4, np.nan, 8, 10]])
+        Y2 = np.array([[1, np.nan, 5, np.nan, 9], [2, 4, np.nan, 8, 10]])
+        nan_locs = ([0, 1, 0], [1, 2, 3])
+        cmtf = cmtf2.CMTF_ALS(3, max_its=100)
+        cmtf.coupled_matrices = [Y1, Y2]
+        cmtf._init_impute_matrices_missing(axis=[0, 1])
+        assert np.allclose(cmtf.coupled_matrices[1][nan_locs], [5, 6, 5])
+        assert np.allclose(cmtf.coupled_matrices[0][nan_locs], [4, 5, 8])
 
     def test_rank3_tensor_with_one_coupled_matrix(self):
         shape = (60, 40, 100)
@@ -35,7 +41,7 @@ class TestCMTF2ALS:
         assert np.allclose(X, estimated_X)
         assert np.allclose(Y, estimated_Y)
     
-    def test_rank4_tensor_with_two_coupled_matrices_on_mode_0(self):
+    def test_rank3_tensor_with_two_coupled_matrices_on_mode_0(self):
         shape = (90, 40, 86)
         rank = 3
         A = np.random.standard_normal((shape[0],rank))
