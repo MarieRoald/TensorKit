@@ -97,7 +97,7 @@ class CMTF_ALS(CP_ALS):
         """
         return self.decomposition.coupling_modes
 
-    def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+    def fit_transform(self, X, coupled_matrices, coupling_modes, y=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None, penalty=None):
         """Executes coupled-tensor-matrix factorisation and returns the decomposition
         
         Parameters
@@ -118,13 +118,15 @@ class CMTF_ALS(CP_ALS):
         impute_matrix_axis : lis(int or None) optional
             Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
             Takes values in list and imputes means along the axis.
+        penalty: float, optional
+            Use if using ACMTF.
         
         Returns
         -------
         decompositions.CoupledTensors
             The decomposed tensor and matrices.
         """
-        self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis)
+        self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis, penalty=penalty)
         return self.decomposition
 
     def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
@@ -148,8 +150,10 @@ class CMTF_ALS(CP_ALS):
         impute_matrix_axis : lis(int or None) optional
             Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
             Takes values in list and imputes means along the axis.
+        penalty: float, optional
+            Use if using ACMTF.
         """
-        self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis)
+        self._init_fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, initial_decomposition=None, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis, penalty=penalty)
         super()._fit()
 
     def init_random(self):
@@ -157,7 +161,7 @@ class CMTF_ALS(CP_ALS):
         """
         pass
 
-    def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+    def _init_fit(self, X, coupled_matrices, coupling_modes, initial_decomposition=None, max_its=None, tensor_missing_values=None, impute_matrix_axis=None, penalty=None):
         """Initialises the factorisation.
         
         Parameters
@@ -178,7 +182,10 @@ class CMTF_ALS(CP_ALS):
         impute_matrix_axis : lis(int or None) optional
             Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
             Takes values in list and imputes means along the axis.
+        penalty: float, optional
+            Use if using ACMTF.
         """
+        self.penalty = penalty
         self.decomposition = self.DecompositionType.random_init(tensor_sizes=X.shape, rank=self.rank,
             matrices_sizes=[mat.shape for mat in coupled_matrices],coupling_modes=coupling_modes)
         self.coupled_matrices = coupled_matrices
@@ -235,6 +242,11 @@ class CMTF_ALS(CP_ALS):
             else:
                 self._update_als_factor(mode)
         self._update_uncoupled_matrix_factors()
+        if self.penalty:
+            self._reguralize_weights()
+        
+    def _reguralize_weights(self):
+        pass
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode.
