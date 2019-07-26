@@ -193,7 +193,8 @@ class Parafac2_ALS(BaseParafac2):
         checkpoint_frequency=None,
         checkpoint_path=None,
         non_negativity_constraints=None,
-        print_frequency=10
+        print_frequency=10,
+        cp_updates_per_it=5,
     ):
         super().__init__(
             rank,
@@ -206,6 +207,7 @@ class Parafac2_ALS(BaseParafac2):
         )
         self.non_negativity_constraints = non_negativity_constraints
         self.print_frequency = print_frequency
+        self.cp_updates_per_it = cp_updates_per_it
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
@@ -258,7 +260,8 @@ class Parafac2_ALS(BaseParafac2):
         #print(f'The MSE is {self.MSE: 4f}, f is {self.loss:4f}')
 
         self.cp_decomposer.set_target(self.projected_X)
-        self.cp_decomposer._update_als_factors()
+        for _ in range(self.cp_updates_per_it):
+            self.cp_decomposer._update_als_factors()
         self.decomposition.blueprint_B[...] *= self.cp_decomposer.weights
         self.cp_decomposition.weights = self.cp_decomposition.weights*0 + 1
         #print('After iteration') 
