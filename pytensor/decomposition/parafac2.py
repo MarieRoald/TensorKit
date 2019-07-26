@@ -119,6 +119,7 @@ class BaseParafac2(BaseDecomposer):
         self.fit(X, y=None, max_its=None, initial_decomposition=None)
         return self.decomposition
 
+    @property
     def loss(self):
         return self.SSE
 
