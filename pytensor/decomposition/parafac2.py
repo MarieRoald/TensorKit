@@ -236,7 +236,7 @@ class Parafac2_ALS(BaseParafac2):
             self._update_convergence()
 
             if it% self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'{it:6d}: The MSE is {self.MSE:4g}, f is {self.loss():4g}, '
+                print(f'{it:6d}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
                       f'improvement is {self._rel_function_change:g}')
 
             self._after_fit_iteration()
