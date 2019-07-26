@@ -252,8 +252,16 @@ class TestCoupledTensors():
 
         return decompositions.CoupledTensors([A, B, C], [V1, V2, V3, V4], [0, 1, 2, 1])
 
-    def test_my_cat_has_aiiiiids(self, random_3mode_ktensor_and_matrices):
+    def test_normalize_does_not_change_tensors(self, random_3mode_ktensor_and_matrices):
         assert random_3mode_ktensor_and_matrices.coupling_modes == [0, 1, 2, 1]
+        X = np.copy(random_3mode_ktensor_and_matrices.construct_tensor())
+        Ys = np.copy(random_3mode_ktensor_and_matrices.construct_matrices())
+
+        random_3mode_ktensor_and_matrices.normalize_components()
+        new_X = random_3mode_ktensor_and_matrices.construct_tensor()
+        new_Ys = random_3mode_ktensor_and_matrices.construct_matrices()
+        assert np.allclose(X, new_X)
+        assert all(np.allclose(Ys[i], new_Ys[i]) for i in range(len(Ys)))
 
     def test_tensors_have_correct_shapes(self, random_3mode_ktensor_and_matrices):
         assert random_3mode_ktensor_and_matrices.construct_tensor().shape == (30, 40, 50)
