@@ -235,7 +235,6 @@ class CMTF_ALS(CP_ALS):
     def _update_als_factors(self):
         """Updates factors with alternating least squares.
         """
-        self.decomposition.normalize_components()
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
             if self.non_negativity_constraints[mode]:
