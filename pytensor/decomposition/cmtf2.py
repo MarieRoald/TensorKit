@@ -270,12 +270,13 @@ class CMTF_ALS(CP_ALS):
             khatri_rao_product = base.khatri_rao(*[self.decomposition.tensor.weights[i]*self.factor_matrices[i] for i in range(self.rank)], skip=mode)
             indices = [i for i, cplmode in enumerate(self.coupling_modes) if cplmode == mode]
             weights = [matrix.weights[mode] for matrix in self.decomposition.matrices]
-            V = weights[0] * self.uncoupled_factor_matrices[0]
+            V = weights[0] * self.uncoupled_factor_matrices[indices[0]]
             if  n_couplings > 1:
                 for i in indices[1:]:
                     V = np.concatenate([V, weights[i]*self.uncoupled_factor_matrices[indices[i]]], axis=0)
             return np.concatenate([khatri_rao_product, V], axis=0).T
         else:
+            # Needs a fixup
             return super()._get_als_lhs(mode)
     
     def _get_als_rhs(self, mode):
@@ -293,7 +294,8 @@ class CMTF_ALS(CP_ALS):
                      self.coupled_matrices[indices[i]]], axis=1)
             return np.concatenate([unfolded_X, coupled_Y], axis=1)
         else:
-            return super()._get_als_rhs(mode)
+            #needs a fixup
+            return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
 
     def _update_uncoupled_matrix_factors(self):
         """Solve ALS problem for uncoupled factor matrices.
