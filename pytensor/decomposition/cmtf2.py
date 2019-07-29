@@ -267,12 +267,13 @@ class CMTF_ALS(CP_ALS):
         if mode in self.coupling_modes:
             
             n_couplings = self.coupling_modes.count(mode)
-            khatri_rao_product = base.khatri_rao(*self.factor_matrices, skip=mode)
+            khatri_rao_product = base.khatri_rao(*[self.decomposition.tensor.weights[i]*self.factor_matrices[i] for i in range(self.rank)], skip=mode)
             indices = [i for i, cplmode in enumerate(self.coupling_modes) if cplmode == mode]
-            V = self.uncoupled_factor_matrices[indices[0]]
+            weights = [matrix.weights[mode] for matrix in self.decomposition.matrices]
+            V = weights[0] * self.uncoupled_factor_matrices[0]
             if  n_couplings > 1:
                 for i in indices[1:]:
-                    V = np.concatenate([V, self.uncoupled_factor_matrices[indices[i]]], axis=0)
+                    V = np.concatenate([V, weights[i]*self.uncoupled_factor_matrices[indices[i]]], axis=0)
             return np.concatenate([khatri_rao_product, V], axis=0).T
         else:
             return super()._get_als_lhs(mode)
@@ -298,7 +299,7 @@ class CMTF_ALS(CP_ALS):
         """Solve ALS problem for uncoupled factor matrices.
         """
         for i, mode in enumerate(self.coupling_modes):
-            lhs = self.factor_matrices[mode].T
+            lhs = self.decomposition.matrices[i].weights[mode]*self.factor_matrices[mode].T
             rhs = self.coupled_matrices[i].T
 
             if self.non_negativity_constraints is None:
