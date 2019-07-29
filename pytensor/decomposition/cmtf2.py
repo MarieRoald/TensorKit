@@ -129,7 +129,7 @@ class CMTF_ALS(CP_ALS):
         self.fit(X=X, coupled_matrices=coupled_matrices, coupling_modes=coupling_modes, y=y, max_its=max_its, tensor_missing_values=tensor_missing_values, impute_matrix_axis=impute_matrix_axis, penalty=penalty)
         return self.decomposition
 
-    def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, tensor_missing_values=None, impute_matrix_axis=None):
+    def fit(self, X, coupled_matrices, coupling_modes, y, max_its=None, tensor_missing_values=None, impute_matrix_axis=None, penalty=None):
         """Fits a CMTF model. 
         
         Parameters
@@ -235,6 +235,7 @@ class CMTF_ALS(CP_ALS):
     def _update_als_factors(self):
         """Updates factors with alternating least squares.
         """
+        self.decomposition.normalize_components()
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
             if self.non_negativity_constraints[mode]:
