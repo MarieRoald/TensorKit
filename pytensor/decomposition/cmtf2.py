@@ -235,7 +235,9 @@ class CMTF_ALS(CP_ALS):
     def _update_als_factors(self):
         """Updates factors with alternating least squares.
         """
+        #print('pre_norm', self.loss)
         self.decomposition.normalize_components()
+        #print('post_norm', self.loss)
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
             if self.non_negativity_constraints[mode]:
@@ -245,6 +247,7 @@ class CMTF_ALS(CP_ALS):
         self._update_uncoupled_matrix_factors()
         if self.penalty:
             self._reguralize_weights()
+        self.decomposition.reset_weights()
         
     def _reguralize_weights(self):
         pass
@@ -252,6 +255,7 @@ class CMTF_ALS(CP_ALS):
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode.
         """
+        self.decomposition.normalize_components()
         lhs = self._get_als_lhs(mode)
         rhs = self._get_als_rhs(mode)
 
@@ -259,6 +263,7 @@ class CMTF_ALS(CP_ALS):
 
         new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
+        #print('update_coupled_factor', self.loss)
 
     def _get_als_lhs(self, mode):
         """Compute left hand side of least squares problem.
@@ -267,7 +272,7 @@ class CMTF_ALS(CP_ALS):
         if mode in self.coupling_modes:
             
             n_couplings = self.coupling_modes.count(mode)
-            khatri_rao_product = base.khatri_rao(*[self.decomposition.tensor.weights[i]*self.factor_matrices[i] for i in range(self.rank)], skip=mode)
+            khatri_rao_product = self.decomposition.tensor.weights[mode]*base.khatri_rao(*self.factor_matrices, skip=mode)
             indices = [i for i, cplmode in enumerate(self.coupling_modes) if cplmode == mode]
             weights = [matrix.weights[mode] for matrix in self.decomposition.matrices]
             V = weights[0] * self.uncoupled_factor_matrices[indices[0]]
@@ -312,4 +317,5 @@ class CMTF_ALS(CP_ALS):
                 self.uncoupled_factor_matrices[i][...] = new_fm
             else:
                 self.uncoupled_factor_matrices[i][...] = base.rightsolve(lhs, rhs)
+            #print('uncoupled_factor', self.loss)
 
