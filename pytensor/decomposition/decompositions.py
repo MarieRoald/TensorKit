@@ -446,12 +446,15 @@ class CoupledTensors(BaseDecomposedTensor):
         self.rank = tensor_factors[0].shape[1]
         #self.matrices_factors = matrices_factors
         self.coupling_modes = coupling_modes
-        self.uncoupled_factor_matrices = matrices_factors
-        self._create_kruskals(tensor_factors, weights=weights, mat_weights=mat_weights)
+        self._create_kruskals(tensor_factors, matrices_factors, weights=weights, mat_weights=mat_weights)
     
     @property
     def factor_matrices(self):
         return self.tensor.factor_matrices
+
+    @property
+    def uncoupled_factor_matrices(self):
+        return [mat.factor_matrices[1] for mat in self.matrices]
 
     @property
     def coupled_factor_matrices(self):
@@ -462,12 +465,12 @@ class CoupledTensors(BaseDecomposedTensor):
             mode = self.coupling_modes[i]
             mat.factor_matrices[0][...] = self.tensor.factor_matrices[mode]
 
-    def _create_kruskals(self, tensor_factors, weights=None, mat_weights=None):
+    def _create_kruskals(self, tensor_factors, matrices_factors, weights=None, mat_weights=None):
         weights = np.ones(self.rank) if weights is None else weights
         mat_weights = [np.ones(self.rank) for _ in range(len(self.coupling_modes))] if mat_weights is None else mat_weights
         self.tensor = KruskalTensor(tensor_factors, weights=weights)
         self.matrices = [KruskalTensor([np.copy(tensor_factors[self.coupling_modes[i]]), mat],
-                    weights=mat_weights[i]) for i, mat in enumerate(self.uncoupled_factor_matrices)]
+                    weights=mat_weights[i]) for i, mat in enumerate(matrices_factors)]
 
     def construct_tensor(self):
         return self.tensor.construct_tensor()
