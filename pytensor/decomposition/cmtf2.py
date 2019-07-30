@@ -307,7 +307,7 @@ class CMTF_ALS(CP_ALS):
             if mode == cplmode:
                 self.decomposition.matrices[i].factor_matrices[0][...] = new_factor
             
-        #print('update_coupled_factor', self.loss)
+        print('update_coupled_factor mode',mode, self.loss)
 
     def _get_als_lhs(self, mode):
         """Compute left hand side of least squares problem.
@@ -381,5 +381,5 @@ class CMTF_ALS(CP_ALS):
                 self.uncoupled_factor_matrices[i][...] = new_fm
             else:
                 self.uncoupled_factor_matrices[i][...] = base.rightsolve(lhs, rhs)
-            #print('uncoupled_factor', self.loss)
+            print('uncoupled_factor_mode', mode, self.loss)
 
