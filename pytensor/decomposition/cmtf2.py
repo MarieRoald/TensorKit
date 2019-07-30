@@ -269,9 +269,28 @@ class CMTF_ALS(CP_ALS):
             if np.isclose(weights[r], 0):
                 l[r] = top[r] / bot[r] 
             else:
+                #TODO: should it be .5*penalty? does it matter?
                 l[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
         self.decomposition.tensor.weights[...] = l
-        #self.factor_matrices[0][...] = l*self.factor_matrices[0]
+        for ind, mat in enumerate(self.decomposition.matrices):
+            mat.reset_weights()
+            mat.normalize_components()
+            weights = mat.weights
+            A, V = mat.factor_matrices
+            s = np.zeros(self.rank)
+            top = np.zeros(self.rank)
+            bot = np.zeros(self.rank)
+            for r in ranks:
+                for i, j in itertools.product(range(A.shape[0]), range(V.shape[0])):
+                    top[r] += A[i, r]*V[j, r] * (self.coupled_matrices[ind][i, j] - sum([weights[rank]*A[i, rank]*V[j, rank] for rank in ranks if rank != r]))
+                    bot[r] += (A[i, r]*V[j, r])**2
+
+                if np.isclose(weights[r], 0):
+                    s[r] = top[r] / bot[r] 
+                else:
+                #TODO: should it be .5*penalty? does it matter?
+                    s[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
+            mat.weights = s
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode.
@@ -284,6 +303,10 @@ class CMTF_ALS(CP_ALS):
         
         new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
+        for i, cplmode in enumerate(self.coupling_modes):
+            if mode == cplmode:
+                self.decomposition.matrices[i].factor_matrices[0][...] = new_factor
+            
         #print('update_coupled_factor', self.loss)
 
     def _get_als_lhs(self, mode):
@@ -308,6 +331,7 @@ class CMTF_ALS(CP_ALS):
             return np.concatenate([khatri_rao_product, V], axis=0).T
         else:
             # V = np.ones((self.rank, self.rank))
+            # TODO: this was a problem, dunno why
             # for i, factor in enumerate(self.factor_matrices):
             #     if i == mode:
             #         continue
@@ -337,6 +361,7 @@ class CMTF_ALS(CP_ALS):
             return np.concatenate([unfolded_X, coupled_Y], axis=1)
         else:
             #needs a fixup
+            # TODO: this was a problem, dunno why
             # factors = [self.decomposition.tensor.weights * mat for mat in self.factor_matrices]
             # return base.matrix_khatri_rao_product(self.X, factors, mode)
             return base.unfold(self.X, mode)
