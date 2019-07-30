@@ -545,8 +545,8 @@ class CoupledTensors2(BaseDecomposedTensor):
             raise ValueError('Coupled tensors was {0} but coupling modes was {1}'.format(len(uncoupled_tensor_factors), len(coupling_modes)))
         self.rank = main_tensor_factors[0].shape[1]
         self.coupling_modes = coupling_modes
-        self.uncoupled_tensor_factors = uncoupled_tensor_factors
-        self._create_kruskals(main_tensor_factors, main_weights=main_weights, uncoupled_weights=uncoupled_weights)
+        #self.uncoupled_tensor_factors = uncoupled_tensor_factors
+        self._create_kruskals(main_tensor_factors, uncoupled_tensor_factors, main_weights=main_weights, uncoupled_weights=uncoupled_weights)
     
     @property
     def main_factor_matrices(self):
@@ -556,20 +556,32 @@ class CoupledTensors2(BaseDecomposedTensor):
     def coupled_factor_matrices(self):
         return [self.main_factor_matrices[i] for i in self.coupling_modes]
 
-    def _create_kruskals(self, tensor_factors, main_weights=None, uncoupled_weights=None):
+    @property
+    def uncoupled_tensor_factors(self):
+        uncoupled_factors = [None]*len(self.coupling_modes)
+        for i, mode in enumerate(self.coupling_modes):
+            if len(self.coupled_tensors[i].factor_matrices) > 2:
+                factors = self.coupled_tensors[i].factor_matrices
+                factors.pop(mode)
+                uncoupled_factors[i] = factors
+            else:
+                uncoupled_factors[i] = self.coupled_tensors[i].factor_matrices[1]
+        return uncoupled_factors
+
+    def _create_kruskals(self, tensor_factors, uncoupled_tensor_factors, main_weights=None, uncoupled_weights=None):
         #TODO: np.copy on the coupled matrices
         main_weights = np.ones(self.rank) if main_weights is None else main_weights
         uncoupled_weights = [np.ones(self.rank) for _ in range(len(self.coupling_modes))] if uncoupled_weights is None else uncoupled_weights
         self.main_tensor = KruskalTensor(tensor_factors, weights=main_weights)
         self.coupled_tensors = []
-        for i, mats in enumerate(self.uncoupled_tensor_factors):
+        for i, mats in enumerate(uncoupled_tensor_factors):
             if type(mats) != list:
                 mats = [mats]
             mode = self.coupling_modes[i]
             factors = [tensor_factors[mode]]+mats
             if len(mats) > 1:
                 factors.insert(mode, factors.pop(0))
-            self.coupled_tensors.append(KruskalTensor(factors, weights=uncoupled_weights[i]))
+            self.coupled_tensors.append(KruskalTensor(factors, weights=None if uncoupled_weights is None else uncoupled_weights[i]))
 
     def construct_tensor(self):
         return self.main_tensor.construct_tensor()
