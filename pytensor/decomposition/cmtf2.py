@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+import itertools
 from .cp import CP_ALS
 
 from . import decompositions
@@ -236,7 +237,7 @@ class CMTF_ALS(CP_ALS):
         """Updates factors with alternating least squares.
         """
         #print('pre_norm', self.loss)
-        self.decomposition.normalize_components()
+        #self.decomposition.normalize_components()
         #print('post_norm', self.loss)
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
@@ -247,15 +248,34 @@ class CMTF_ALS(CP_ALS):
         self._update_uncoupled_matrix_factors()
         if self.penalty:
             self._reguralize_weights()
-        self.decomposition.reset_weights()
+        #self.decomposition.reset_weights()
         
     def _reguralize_weights(self):
-        pass
+        self.decomposition.tensor.reset_weights()
+        self.decomposition.tensor.normalize_components()
+        weights = self.decomposition.tensor.weights
+        A, B, C = self.factor_matrices
+        l = np.zeros(self.rank)
+        top = np.zeros(self.rank)
+        bot = np.zeros(self.rank)
+        ranks = np.arange(0, self.rank)
+        for r in ranks:
+            for i, j, k in itertools.product(range(A.shape[0]), range(B.shape[0]), range(C.shape[0])):
+                bot[r] += (A[i, r]*B[j, r]*C[k, r])**2
+                top[r] += A[i, r]*B[j, r]*C[k, r] * (self.X[i, j, k] - sum([weights[rank]*A[i, rank]*B[j, rank]*C[k, rank] for rank in ranks if rank != r]))
+            
+            if np.isclose(weights[r], 0):
+                l[r] = top[r] / bot[r] 
+            else:
+                l[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
+        print(top, bot, l)
+        self.decomposition.tensor.weights[...] = l
+        #self.factor_matrices[0][...] = l*self.factor_matrices[0]
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode.
         """
-        self.decomposition.normalize_components()
+
         lhs = self._get_als_lhs(mode)
         rhs = self._get_als_rhs(mode)
 
@@ -272,17 +292,23 @@ class CMTF_ALS(CP_ALS):
         if mode in self.coupling_modes:
             
             n_couplings = self.coupling_modes.count(mode)
-            khatri_rao_product = self.decomposition.tensor.weights[mode]*base.khatri_rao(*self.factor_matrices, skip=mode)
+            factors = [self.decomposition.tensor.weights*mat for mat in self.factor_matrices]
+            khatri_rao_product = base.khatri_rao(*factors, skip=mode)
             indices = [i for i, cplmode in enumerate(self.coupling_modes) if cplmode == mode]
-            weights = [matrix.weights[mode] for matrix in self.decomposition.matrices]
+            weights = [matrix.weights for matrix in self.decomposition.matrices]
             V = weights[0] * self.uncoupled_factor_matrices[indices[0]]
             if  n_couplings > 1:
                 for i in indices[1:]:
                     V = np.concatenate([V, weights[i]*self.uncoupled_factor_matrices[indices[i]]], axis=0)
             return np.concatenate([khatri_rao_product, V], axis=0).T
         else:
-            # Needs a fixup
-            return super()._get_als_lhs(mode)
+            V = np.ones((self.rank, self.rank))
+            for i, factor in enumerate(self.factor_matrices):
+                if i == mode:
+                    continue
+                V *= (self.decomposition.tensor.weights*factor).T @ factor
+            return V
+            # return super()._get_als_lhs(mode)
     
     def _get_als_rhs(self, mode):
         """Compute right hand side of least squares problem.
@@ -300,13 +326,15 @@ class CMTF_ALS(CP_ALS):
             return np.concatenate([unfolded_X, coupled_Y], axis=1)
         else:
             #needs a fixup
-            return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
+            factors = [self.decomposition.tensor.weights * mat for mat in self.factor_matrices]
+            return base.matrix_khatri_rao_product(self.X, factors, mode)
+            # return super()._get_als_rhs(mode)
 
     def _update_uncoupled_matrix_factors(self):
         """Solve ALS problem for uncoupled factor matrices.
         """
         for i, mode in enumerate(self.coupling_modes):
-            lhs = self.decomposition.matrices[i].weights[mode]*self.factor_matrices[mode].T
+            lhs = (self.decomposition.matrices[i].weights*self.factor_matrices[mode]).T
             rhs = self.coupled_matrices[i].T
 
             if self.non_negativity_constraints is None:
