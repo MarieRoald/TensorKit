@@ -289,7 +289,7 @@ class CMTF_ALS(CP_ALS):
                     s[r] = top[r] / bot[r] 
                 else:
                 #TODO: should it be .5*penalty? does it matter?
-                    s[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
+                    s[r] = (top[r] - self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
             mat.weights = s
 
     def _update_als_factor(self, mode):
