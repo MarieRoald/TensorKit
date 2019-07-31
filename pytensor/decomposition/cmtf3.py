@@ -366,20 +366,20 @@ class CMTF_ALS(CP_ALS):
             modes = modes[modes != coupl_mode]
             for mode in modes:
                 lhs = np.ones((self.rank, self.rank))
-                for i, factor in enumerate(tensor.factor_matrices):
-                    if i == mode:
+                for j, factor in enumerate(tensor.factor_matrices):
+                    if j == mode:
                         continue
                     lhs *= factor.T @ factor
                 rhs = base.matrix_khatri_rao_product(self.original_tensors[i], tensor.factor_matrices, mode)
 
-            if self.non_negativity_constraints is None:
-                tensor.factor_matrices[i][...] = base.rightsolve(lhs, rhs)
+                if self.non_negativity_constraints is None:
+                    tensor.factor_matrices[i][...] = base.rightsolve(lhs, rhs)
 
-            if self.non_negativity_constraints[mode]:
-                new_fm = base.non_negative_rightsolve(lhs, rhs)
-                tensor.factor_matrices[i][...] = new_fm
-            else:
-                tensor.factor_matrices[i][...] = base.rightsolve(lhs, rhs)
+                if self.non_negativity_constraints[mode]:
+                    new_fm = base.non_negative_rightsolve(lhs, rhs)
+                    tensor.factor_matrices[i][...] = new_fm
+                else:
+                    tensor.factor_matrices[mode][...] = base.rightsolve(lhs, rhs)
         
         for i, mode in enumerate(self.coupling_modes[self.num_coupled_tensors:]):
             lhs = (self.decomposition.coupled_matrices[i].weights*self.factor_matrices[mode]).T
