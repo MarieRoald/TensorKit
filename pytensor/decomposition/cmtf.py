@@ -47,7 +47,7 @@ class CMTF_ALS(CP_ALS):
     def MSE(self):
         #raise NotImplementedError('Not implemented') 
         # TODO: fix this
-        num_elements = np.prod(self.X.shape) + sum(np.prod(Yi.shape) for Yi in self.coupled_factor_matrices)
+        num_elements = np.prod(self.X.shape) + sum(np.prod(Yi.shape) for Yi in self.coupled_matrices)
         return self.SSE/num_elements
 
     @property
