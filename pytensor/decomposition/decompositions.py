@@ -561,11 +561,11 @@ class CoupledTensors2(BaseDecomposedTensor):
         uncoupled_factors = [None]*len(self.coupling_modes)
         for i, mode in enumerate(self.coupling_modes):
             if len((self.coupled_tensors+self.coupled_matrices)[i].factor_matrices) > 2:
-                factors = self.coupled_tensors[i].factor_matrices
+                factors = self.coupled_tensors[i].factor_matrices.copy()
                 factors.pop(mode)
                 uncoupled_factors[i] = factors
             else:
-                #TODO: make more elegant 
+                #TODO: make more elegant
                 uncoupled_factors[i] = (self.coupled_tensors+self.coupled_matrices)[i].factor_matrices[1]
         return uncoupled_factors
 
