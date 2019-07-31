@@ -78,14 +78,14 @@ class CMTF_ALS(CP_ALS):
         return self.decomposition.coupled_factor_matrices
 
     @property
-    def uncoupled_factor_matrices(self):
+    def uncoupled_tensor_factors(self):
         """        
         Returns
         -------
         list(np.ndarray)
             The uncoupled factor matrices.
         """
-        return self.decomposition.uncoupled_factor_matrices
+        return self.decomposition.uncoupled_tensor_factors
     
     @property
     def num_coupled_tensors(self):
@@ -312,13 +312,13 @@ class CMTF_ALS(CP_ALS):
             n_couplings = mat_couplings.count(mode)
             if n_couplings > 0:    
                 
-                matrix_factors = [np.copy(mat.factor_matrices[1] for mat in self.decomposition.coupled_matrices)]
+                matrix_factors = [np.copy(mat.factor_matrices[1]) for mat in self.decomposition.coupled_matrices]
                 indices = [i for i, cplmode in enumerate(mat_couplings) if cplmode == mode]
                 weights = [mat.weights for mat in self.decomposition.coupled_matrices]
-                V = weights[indices[0]] * self.uncoupled_factor_matrices[1][indices[0]]
+                V = weights[indices[0]] * self.uncoupled_tensor_factors[self.num_coupled_tensors+indices[0]]
                 if  n_couplings > 1:
                     for i in indices[1:]:
-                        V = np.concatenate([V, weights[i]*matrix_factors[indices[i]]], axis=0)
+                        V = np.concatenate([V, weights[i]*matrix_factors[self.num_coupled_tensors+i]], axis=0)
                 return np.concatenate([khatri_rao_products, V], axis=0).T
             else:
                 return khatri_rao_products.T
@@ -332,9 +332,9 @@ class CMTF_ALS(CP_ALS):
             # return V
             factors = [np.copy(mat) for mat in self.factor_matrices]
             if mode != 0:
-                factors[0] = self.decomposition.tensor.weights*factors[0]
+                factors[0] = self.decomposition.main_tensor.weights*factors[0]
             else:
-                factors[1] = self.decomposition.tensor.weights*factors[1]
+                factors[1] = self.decomposition.main_tensor.weights*factors[1]
             return base.khatri_rao(*factors, skip=mode).T
              
     
