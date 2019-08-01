@@ -191,6 +191,7 @@ class CMTF_ALS(CP_ALS):
         """
         #TODO: if-test to check that tensors and matrices are ordered [tensors, matrices]
         self.penalty = penalty
+        self.missing = True if coupled_missing_values is not None else False
         self.decomposition = self.DecompositionType.random_init(main_tensor_shape=X.shape, rank=self.rank,
             coupled_tensors_shapes=[tensor.shape for tensor in coupled_tensors],coupling_modes=coupling_modes)
         self.original_tensors = coupled_tensors
@@ -269,6 +270,8 @@ class CMTF_ALS(CP_ALS):
             else:
                 self._update_als_factor(mode)
         self._update_uncoupled_tensor_factors()
+        if self.missing:
+            self._set_new_tensors()
         if self.penalty:
             self._reguralize_weights()
         
