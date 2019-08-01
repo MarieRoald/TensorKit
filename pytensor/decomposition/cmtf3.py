@@ -298,7 +298,7 @@ class CMTF_ALS(CP_ALS):
                 factors[1] = self.decomposition.main_tensor.weights*factors[1]
             khatri_rao_products = base.khatri_rao(*factors, skip=mode)
             for i, tensor in enumerate(self.decomposition.coupled_tensors):
-                if self.coupling_modes[i] != 0:
+                if self.coupling_modes[i] != mode:
                     continue
                 factors = [np.copy(mat) for mat in tensor.factor_matrices]
                 if mode != 0:
@@ -318,7 +318,7 @@ class CMTF_ALS(CP_ALS):
                 V = weights[indices[0]] * self.uncoupled_tensor_factors[self.num_coupled_tensors+indices[0]]
                 if  n_couplings > 1:
                     for i in indices[1:]:
-                        V = np.concatenate([V, weights[i]*matrix_factors[self.num_coupled_tensors+i]], axis=0)
+                        V = np.concatenate([V, weights[i]*matrix_factors[i]], axis=0)
                 return np.concatenate([khatri_rao_products, V], axis=0).T
             else:
                 return khatri_rao_products.T
