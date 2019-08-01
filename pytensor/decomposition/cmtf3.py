@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 from .cp import CP_ALS
+import itertools
 
 from . import decompositions
 from ..base import unfold
@@ -276,7 +277,45 @@ class CMTF_ALS(CP_ALS):
             self._reguralize_weights()
         
     def _reguralize_weights(self):
-        pass
+        self.decomposition.reset_weights()
+        self.decomposition.normalize_components()
+        for ind, tensor in enumerate([self.decomposition.main_tensor] +self.decomposition.coupled_tensors):
+            weights = tensor.weights
+            A, B, C = tensor.factor_matrices
+            l = np.zeros(self.rank)
+            top = np.zeros(self.rank)
+            bot = np.zeros(self.rank)
+            ranks = np.arange(0, self.rank)
+            for r in ranks:
+                for i, j, k in itertools.product(range(A.shape[0]), range(B.shape[0]), range(C.shape[0])):
+                    bot[r] += (A[i, r]*B[j, r]*C[k, r])**2
+                    if ind == 0:
+                        top[r] += A[i, r]*B[j, r]*C[k, r] * (self.X[i, j, k] - sum([weights[rank]*A[i, rank]*B[j, rank]*C[k, rank] for rank in ranks if rank != r]))
+                    else:
+                        top[r] += A[i, r]*B[j, r]*C[k, r] * (self.original_tensors[ind-1][i, j, k] - sum([weights[rank]*A[i, rank]*B[j, rank]*C[k, rank] for rank in ranks if rank != r]))
+                if np.isclose(weights[r], 0):
+                    l[r] = top[r] / bot[r] 
+                else:
+                    #TODO: should it be .5*penalty? does it matter?
+                    l[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
+            tensor.weights[...] = l
+        for ind, mat in enumerate(self.decomposition.coupled_matrices):
+            weights = mat.weights
+            A, V = mat.factor_matrices
+            s = np.zeros(self.rank)
+            top = np.zeros(self.rank)
+            bot = np.zeros(self.rank)
+            for r in ranks:
+                for i, j in itertools.product(range(A.shape[0]), range(V.shape[0])):
+                    top[r] += A[i, r]*V[j, r] * (self.original_tensors[self.num_coupled_tensors+ind][i, j] - sum([weights[rank]*A[i, rank]*V[j, rank] for rank in ranks if rank != r]))
+                    bot[r] += (A[i, r]*V[j, r])**2
+
+                if np.isclose(weights[r], 0):
+                    s[r] = top[r] / bot[r] 
+                else:
+                #TODO: should it be .5*penalty? does it matter?
+                    s[r] = (top[r] - self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
+            mat.weights = s
 
     def _update_als_factor(self, mode):
         """Solve least squares problem to get factor for one mode.
