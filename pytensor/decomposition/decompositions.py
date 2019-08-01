@@ -592,7 +592,7 @@ class CoupledTensors2(BaseDecomposedTensor):
         return [tensor.construct_tensor() for tensor in self.coupled_tensors + self.coupled_matrices]
 
     def reset_weights(self):
-        for obj in [self.main_tensor] + self.coupled_tensors:
+        for obj in [self.main_tensor] + self.coupled_tensors + self.coupled_matrices:
             obj.reset_weights()
 
     def normalize_components(self, update_weights=True, eps=1e-15):
@@ -604,7 +604,7 @@ class CoupledTensors2(BaseDecomposedTensor):
             If true, then the weights of this Kruskal tensor will be set to the product of the
             component norms.
         """
-        for obj in [self.main_tensor] + self.coupled_tensors:
+        for obj in [self.main_tensor] + self.coupled_tensors + self.coupled_matrices:
             obj.normalize_components(update_weights=update_weights)
         return self
 
