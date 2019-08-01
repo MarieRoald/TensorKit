@@ -32,7 +32,7 @@ class CMTF_ALS(CP_ALS):
         """
         #raise NotImplementedError('Not implemented') 
         # TODO: fix this
-        num_elements = np.prod(self.X.shape) + sum(np.prod(Yi.shape) for Yi in self.coupled_factor_matrices)
+        num_elements = np.prod(self.X.shape) + sum(np.prod(Yi.shape) for Yi in self.coupled_matrices)
         return self.SSE/num_elements
 
     @property
@@ -187,6 +187,7 @@ class CMTF_ALS(CP_ALS):
             Use if using ACMTF.
         """
         self.penalty = penalty
+        self.missing = True if impute_matrix_axis is not None else False
         self.decomposition = self.DecompositionType.random_init(tensor_sizes=X.shape, rank=self.rank,
             matrices_sizes=[mat.shape for mat in coupled_matrices],coupling_modes=coupling_modes)
         self.coupled_matrices = coupled_matrices
@@ -230,6 +231,7 @@ class CMTF_ALS(CP_ALS):
     def _set_new_matrices(self):
         """Updates the coupled matrices. Does nothing if original matrix did not have missing values.
         """
+        #TODO: is not used?
         for i, N in enumerate(self.Ns):
             self.coupled_matrices[i] = self.coupled_matrices[i] * N + self.reconstructed_coupled_matrices[i] * (np.ones(shape=N.shape) - N)
 
@@ -246,6 +248,8 @@ class CMTF_ALS(CP_ALS):
             else:
                 self._update_als_factor(mode)
         self._update_uncoupled_matrix_factors()
+        if self.missing:
+            self._set_new_matrices()
         if self.penalty:
             print('pre reguralize:', self.loss)
             self._reguralize_weights()
@@ -307,7 +311,7 @@ class CMTF_ALS(CP_ALS):
             if mode == cplmode:
                 self.decomposition.matrices[i].factor_matrices[0][...] = new_factor
             
-        print('update_coupled_factor mode',mode, self.loss)
+        print('cfm',mode, self.loss)
 
     def _get_als_lhs(self, mode):
         """Compute left hand side of least squares problem.
@@ -324,7 +328,7 @@ class CMTF_ALS(CP_ALS):
             khatri_rao_product = base.khatri_rao(*factors, skip=mode)
             indices = [i for i, cplmode in enumerate(self.coupling_modes) if cplmode == mode]
             weights = [matrix.weights for matrix in self.decomposition.matrices]
-            V = weights[0] * self.uncoupled_factor_matrices[indices[0]]
+            V = weights[indices[0]] * self.uncoupled_factor_matrices[indices[0]]
             if  n_couplings > 1:
                 for i in indices[1:]:
                     V = np.concatenate([V, weights[i]*self.uncoupled_factor_matrices[indices[i]]], axis=0)
@@ -381,5 +385,5 @@ class CMTF_ALS(CP_ALS):
                 self.uncoupled_factor_matrices[i][...] = new_fm
             else:
                 self.uncoupled_factor_matrices[i][...] = base.rightsolve(lhs, rhs)
-            print('uncoupled_factor_mode', mode, self.loss)
+            print('ufm', mode, self.loss)
 
