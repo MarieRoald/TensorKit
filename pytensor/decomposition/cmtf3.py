@@ -231,17 +231,17 @@ class CMTF_ALS(CP_ALS):
         tensor_axes = axes[:self.num_coupled_tensors]
         matrix_axes = axes[self.num_coupled_tensors:]
 
-        for i, axis in enumerate(tensor_axes):
-            C = np.copy(self.original_tensors[i])
+        for ind, axis in enumerate(tensor_axes):
+            C = np.copy(self.original_tensors[ind])
             nan_locs = np.where(np.isnan(C))
             for i, j, k in zip(nan_locs[0], nan_locs[1], nan_locs[2]):
                 if axis == 0:
-                    C[i, j, k] = np.nanmean(self.original_tensors[i][:, j, k])
+                    C[i, j, k] = np.nanmean(self.original_tensors[ind][:, j, k])
                 elif axis == 1:
-                    C[i, j, k] = np.nanmean(self.original_tensors[i][i,:, k])
+                    C[i, j, k] = np.nanmean(self.original_tensors[ind][i,:, k])
                 elif axis == 2:
-                    C[i, j, k] = np.nanmean(self.original_tensors[i][i, j, :])
-            self.original_tensors[i] = np.copy(C)
+                    C[i, j, k] = np.nanmean(self.original_tensors[ind][i, j, :])
+            self.original_tensors[ind] = np.copy(C)
 
         for i, axis in enumerate(matrix_axes):
             if axis is None:
