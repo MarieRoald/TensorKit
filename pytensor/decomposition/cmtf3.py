@@ -10,7 +10,7 @@ from .. import base
 class CMTF_ALS(CP_ALS):
     """Coupled Tensor decomposition using Alternating Least Squares.
     """
-    DecompositionType = decompositions.CoupledTensors2
+    DecompositionType = decompositions.CoupledTensors
     @property
     def SSE(self):
         """Computes the sum squared error of the decomposition
@@ -320,7 +320,8 @@ class CMTF_ALS(CP_ALS):
             A, V = mat.factor_matrices
             s = np.zeros(self.rank)
             top = np.zeros(self.rank)
-            bot = np.zeros(self.rank)
+            #bot = np.zeros(self.rank)
+            bot = np.ones(self.rank)
             for r in ranks:
                 for i, j in itertools.product(range(A.shape[0]), range(V.shape[0])):
                     top[r] += A[i, r]*V[j, r] * (self.original_tensors[self.num_coupled_tensors+ind][i, j] - sum([weights[rank]*A[i, rank]*V[j, rank] for rank in ranks if rank != r]))
