@@ -200,7 +200,8 @@ class CMTF_ALS(CP_ALS):
         penalty: float, optional
             The penalty for L1-regularisation of the weights. Use if using ACMTF.
         """
-        #TODO: if-test to check that tensors and matrices are ordered [tensors, matrices]
+        #TODO: if-test to check that coupled_tensors are ordered [tensors, matrices]
+        #TODO: user has to order list [tensors, matrices], program should do it itself.
         self.penalty = penalty
         self.missing = True if coupled_missing_values is not None else False
         self.decomposition = self.DecompositionType.random_init(main_tensor_shape=X.shape, rank=self.rank,
@@ -296,9 +297,12 @@ class CMTF_ALS(CP_ALS):
             A, B, C = tensor.factor_matrices
             l = np.zeros(self.rank)
             top = np.zeros(self.rank)
-            bot = np.zeros(self.rank)
+            #bot = np.zeros(self.rank)
+            #I think bot will always be ones.
+            bot = np.ones(self.rank)
             ranks = np.arange(0, self.rank)
             for r in ranks:
+                #TODO: Make faster with vectorised operations.
                 for i, j, k in itertools.product(range(A.shape[0]), range(B.shape[0]), range(C.shape[0])):
                     #bot[r] += (A[i, r]*B[j, r]*C[k, r])**2
                     if ind == 0:
@@ -309,7 +313,7 @@ class CMTF_ALS(CP_ALS):
                     l[r] = top[r] / bot[r] 
                 else:
                     #TODO: should it be .5*penalty? does it matter?
-                    l[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) #/ bot[r] 
+                    l[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
             tensor.weights[...] = l
         for ind, mat in enumerate(self.decomposition.coupled_matrices):
             weights = mat.weights
@@ -323,11 +327,10 @@ class CMTF_ALS(CP_ALS):
                     #bot[r] += (A[i, r]*V[j, r])**2
 
                 if np.isclose(weights[r], 0):
-                    print('heyisclose', weights[r])
-                    s[r] = top[r] #/ bot[r] 
+                    s[r] = top[r] / bot[r] 
                 else:
                 #TODO: should it be .5*penalty? does it matter?
-                    s[r] = (top[r] - self.penalty * (1 if abs(weights[r])>0 else -1))# / bot[r] 
+                    s[r] = (top[r] - self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
             mat.weights = s
 
     def _update_als_factor(self, mode):
@@ -347,6 +350,8 @@ class CMTF_ALS(CP_ALS):
         # TODO: make this nicer, make a self.mat_coupling_modes?
         if mode in self.coupling_modes:
             factors = [np.copy(mat) for mat in self.factor_matrices]
+
+            #Multiplies weight into one of the factors in the khatri-rao product.
             if mode != 0:
                 factors[0] = self.decomposition.main_tensor.weights*factors[0]
             else:
@@ -379,7 +384,7 @@ class CMTF_ALS(CP_ALS):
                 return khatri_rao_products.T
         else:
             # V = np.ones((self.rank, self.rank))
-            # TODO: this was a problem, dunno why
+            # TODO: this didnt work, need to look into to make it faster (invert smaller matrix)
             # for i, factor in enumerate(self.factor_matrices):
             #     if i == mode:
             #         continue
@@ -407,7 +412,7 @@ class CMTF_ALS(CP_ALS):
                         rhs = np.concatenate([rhs, base.unfold(tensor, mode)], axis=1)
             return rhs
         else:
-            # TODO: this was a problem, dunno why
+            # TODO: this didnt work, need to look into to make it faster (invert smaller matrix)
             # factors = [self.decomposition.tensor.weights * mat for mat in self.factor_matrices]
             # return base.matrix_khatri_rao_product(self.X, factors, mode)
             return base.unfold(self.X, mode)
