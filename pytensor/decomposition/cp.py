@@ -218,6 +218,7 @@ class CP_ALS(BaseCP):
                 self.M[inds] = 0
                 self._init_impute_missing(missing_values)
             elif isinstance(missing_values, tuple):
+                # In this case, indices of missing values are given. They are pre-imputed by the user.
                 if all(isinstance(missing_values[i], (np.ndarray, list)) for i in range(self.rank)):
                     self.M = np.ones(X.shape)
                     self.M[missing_values] = 0
@@ -243,6 +244,13 @@ class CP_ALS(BaseCP):
         return V
     
     def _init_impute_missing(self, axis):
+        """Imputes mean of given axis into missing location. 
+        
+        Parameters
+        ----------
+        axis : int
+            The axis to impute means along.
+        """
         #TODO: generalise to higher dimensions.
         C = np.copy(self.X)
         nan_locs = np.where(np.isnan(self.X))
@@ -256,6 +264,8 @@ class CP_ALS(BaseCP):
         self.X = np.copy(C)
         
     def _set_new_X(self):
+        """Updates missing values with the values from the recontructed tensor.
+        """
         self.X = self.X * self.M + self.decomposition.construct_tensor()*((np.ones(self.X.shape)) - self.M)
 
     def _get_als_rhs(self, mode):
