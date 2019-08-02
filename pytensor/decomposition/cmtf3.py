@@ -8,6 +8,8 @@ from ..base import unfold
 from .. import base
 
 class CMTF_ALS(CP_ALS):
+    """Coupled Tensor decomposition using Alternating Least Squares.
+    """
     DecompositionType = decompositions.CoupledTensors2
     @property
     def SSE(self):
@@ -59,7 +61,7 @@ class CMTF_ALS(CP_ALS):
 
     @property
     def reconstructed_coupled_tensors(self):
-        """        
+        """Constructs the coupeld tensors from decomposition.        
         Returns
         -------
         list(np.ndarray)
@@ -69,7 +71,7 @@ class CMTF_ALS(CP_ALS):
 
     @property
     def coupled_factor_matrices(self):
-        """[summary]
+        """The coupled factor matrices for the the coupled tensors.
         
         Returns
         -------
@@ -80,7 +82,8 @@ class CMTF_ALS(CP_ALS):
 
     @property
     def uncoupled_tensor_factors(self):
-        """        
+        """The uncoupeld factor matrices for the coupled tensors.
+
         Returns
         -------
         list(np.ndarray)
@@ -90,6 +93,13 @@ class CMTF_ALS(CP_ALS):
     
     @property
     def num_coupled_tensors(self):
+        """Number of coupled tensors that are not matrices, i.e. dim > 2.
+        
+        Returns
+        -------
+        int
+            Number of coupled tensors.
+        """
         return len(self.decomposition.coupled_tensors)
 
     @property
@@ -98,7 +108,7 @@ class CMTF_ALS(CP_ALS):
         Returns
         -------
         list(int)
-            The modes the matrices are coupled to the tensor along.
+            The modes the coupled tensors are coupled to the main tensor along.
         """
         return self.decomposition.coupling_modes
 
@@ -109,27 +119,27 @@ class CMTF_ALS(CP_ALS):
         ----------
         X : np.ndarray
             The n-dimensional tensor to fit, n>2.
-        coupled_matrices : list(np.ndarray)
-            The coupled matrices to fit.
+        coupled_tensors : list(np.ndarray)
+            The coupled tensors to fit. All tensors of dimension 2 (matrices) must be at end of list.
         coupling_modes : list(int)
-            Modes to couple along, must be ordered like coupled_matrices.
+            Modes to couple along, must be ordered like coupled_tensors.
         y : None
             Ignored, included to follow sklearn standards.
         max_its : int, optional
-            If set, then this will override the class's max_its
+            If set, this will override the class's max_its
         tensor_missing_values : int or tuple(np.ndarray), optional
-            Use if tensor has Nan-values. If int, imputes mean along the given axis.
-            If tuple(np.ndarray), assumes these indices to be pre-imputed Nans.
-        impute_matrix_axis : lis(int or None) optional
-            Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
+            Use if main tensor has Nan-values. If int, imputes mean along the given axis.
+            If tuple(np.ndarray), assumes these indices to be unknown but pre-imputed.
+        coupled_missing_values : lis(int or None), optional
+            Use if coupled tensors have NaNs. Must be same length and ordered as coupled_tensors. 
             Takes values in list and imputes means along the axis.
         penalty: float, optional
-            Use if using ACMTF.
+            The penalty for L1-regularisation of the weights. Use if using ACMTF.
         
         Returns
         -------
         decompositions.CoupledTensors
-            The decomposed tensor and matrices.
+            The decomposed main and coupeld tensors.
         """
         self.fit(X=X, coupled_tensors=coupled_tensors, coupling_modes=coupling_modes, y=y, max_its=max_its, tensor_missing_values=tensor_missing_values, coupled_missing_values=coupled_missing_values, penalty=penalty)
         return self.decomposition
@@ -141,22 +151,22 @@ class CMTF_ALS(CP_ALS):
         ----------
         X : np.ndarray
             The n-dimensional tensor to fit, n>2.
-        coupled_matrices : list(np.ndarray)
-            The coupled matrices to fit.
+        coupled_tensors : list(np.ndarray)
+            The coupled tensors to fit. All tensors of dimension 2 (matrices) must be at end of list.
         coupling_modes : list(int)
-            Modes to couple along, must be ordered like coupled_matrices.
+            Modes to couple along, must be ordered like coupled_tensors.
         y : None
             Ignored, included to follow sklearn standards.
         max_its : int, optional
-            If set, then this will override the class's max_its
+            If set, this will override the class's max_its
         tensor_missing_values : int or tuple(np.ndarray), optional
-            Use if tensor has Nan-values. If int, imputes mean along the given axis.
-            If tuple(np.ndarray), assumes these indices to be pre-imputed Nans.
-        impute_matrix_axis : lis(int or None) optional
-            Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
+            Use if main tensor has Nan-values. If int, imputes mean along the given axis.
+            If tuple(np.ndarray), assumes these indices to be unknown but pre-imputed.
+        coupled_missing_values : lis(int or None), optional
+            Use if coupled tensors have NaNs. Must be same length and ordered as coupled_tensors. 
             Takes values in list and imputes means along the axis.
         penalty: float, optional
-            Use if using ACMTF.
+            The penalty for L1-regularisation of the weights. Use if using ACMTF.
         """
         self._init_fit(X=X, coupled_tensors=coupled_tensors, coupling_modes=coupling_modes, initial_decomposition=None, tensor_missing_values=tensor_missing_values, coupled_missing_values=coupled_missing_values, penalty=penalty)
         super()._fit()
@@ -173,22 +183,22 @@ class CMTF_ALS(CP_ALS):
         ----------
         X : np.ndarray
             The n-dimensional tensor to fit, n>2.
-        coupled_matrices : list(np.ndarray)
-            The coupled matrices to fit.
+        coupled_tensors : list(np.ndarray)
+            The coupled tensors to fit. All tensors of dimension 2 (matrices) must be at end of list.
         coupling_modes : list(int)
-            Modes to couple along, must be ordered like coupled_matrices.
+            Modes to couple along, must be ordered like coupled_tensors.
         initial_decomposition : None
-            Ignored, not implemented yet.
+            Not implemented.
         max_its : int, optional
-            If set, then this will override the class's max_its
+            If set, this will override the class's max_its
         tensor_missing_values : int or tuple(np.ndarray), optional
-            Use if tensor has Nan-values. If int, imputes mean along the given axis.
-            If tuple(np.ndarray), assumes these indices to be pre-imputed Nans.
-        impute_matrix_axis : lis(int or None) optional
-            Use if matrices has Nan. Must be same length and ordered as coupled_matrices. 
+            Use if main tensor has Nan-values. If int, imputes mean along the given axis.
+            If tuple(np.ndarray), assumes these indices to be unknown but pre-imputed.
+        coupled_missing_values : lis(int or None), optional
+            Use if coupled tensors have NaNs. Must be same length and ordered as coupled_tensors. 
             Takes values in list and imputes means along the axis.
         penalty: float, optional
-            Use if using ACMTF.
+            The penalty for L1-regularisation of the weights. Use if using ACMTF.
         """
         #TODO: if-test to check that tensors and matrices are ordered [tensors, matrices]
         self.penalty = penalty
@@ -210,11 +220,11 @@ class CMTF_ALS(CP_ALS):
             self._init_impute_tensors_missing(coupled_missing_values)
     
     def _init_impute_tensors_missing(self, axes):
-        """Mean-imputes coupled matrices with missing values (np.nan).
+        """Mean-imputes coupled tensors with missing values (np.nan).
         
         Parameters
         ----------
-        axis : list(int)
+        axes : list(int)
             The axes to impute a long. 
         
         Raises
@@ -253,7 +263,7 @@ class CMTF_ALS(CP_ALS):
             self.original_tensors[i+self.num_coupled_tensors][inds] = np.take(axis_means, inds[0 if axis==1 else 1])
 
     def _set_new_tensors(self):
-        """Updates the coupled matrices. Does nothing if original matrix did not have missing values.
+        """Updates all coupled tensors. A tensor is only changed if it originally had missing values.
         """
         for i, M in enumerate(self.Ms):
             self.original_tensors[i] = self.original_tensors[i] * M + self.reconstructed_coupled_tensors[i] * (np.ones(shape=M.shape) - M)
@@ -277,6 +287,8 @@ class CMTF_ALS(CP_ALS):
             self._reguralize_weights()
         
     def _reguralize_weights(self):
+        """Reguralises the weights of the decomposition with L1.
+        """
         self.decomposition.reset_weights()
         self.decomposition.normalize_components()
         for ind, tensor in enumerate([self.decomposition.main_tensor] +self.decomposition.coupled_tensors):
@@ -288,7 +300,7 @@ class CMTF_ALS(CP_ALS):
             ranks = np.arange(0, self.rank)
             for r in ranks:
                 for i, j, k in itertools.product(range(A.shape[0]), range(B.shape[0]), range(C.shape[0])):
-                    bot[r] += (A[i, r]*B[j, r]*C[k, r])**2
+                    #bot[r] += (A[i, r]*B[j, r]*C[k, r])**2
                     if ind == 0:
                         top[r] += A[i, r]*B[j, r]*C[k, r] * (self.X[i, j, k] - sum([weights[rank]*A[i, rank]*B[j, rank]*C[k, rank] for rank in ranks if rank != r]))
                     else:
@@ -297,7 +309,7 @@ class CMTF_ALS(CP_ALS):
                     l[r] = top[r] / bot[r] 
                 else:
                     #TODO: should it be .5*penalty? does it matter?
-                    l[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
+                    l[r] = (top[r] + self.penalty * (1 if abs(weights[r])>0 else -1)) #/ bot[r] 
             tensor.weights[...] = l
         for ind, mat in enumerate(self.decomposition.coupled_matrices):
             weights = mat.weights
@@ -308,13 +320,14 @@ class CMTF_ALS(CP_ALS):
             for r in ranks:
                 for i, j in itertools.product(range(A.shape[0]), range(V.shape[0])):
                     top[r] += A[i, r]*V[j, r] * (self.original_tensors[self.num_coupled_tensors+ind][i, j] - sum([weights[rank]*A[i, rank]*V[j, rank] for rank in ranks if rank != r]))
-                    bot[r] += (A[i, r]*V[j, r])**2
+                    #bot[r] += (A[i, r]*V[j, r])**2
 
                 if np.isclose(weights[r], 0):
-                    s[r] = top[r] / bot[r] 
+                    print('heyisclose', weights[r])
+                    s[r] = top[r] #/ bot[r] 
                 else:
                 #TODO: should it be .5*penalty? does it matter?
-                    s[r] = (top[r] - self.penalty * (1 if abs(weights[r])>0 else -1)) / bot[r] 
+                    s[r] = (top[r] - self.penalty * (1 if abs(weights[r])>0 else -1))# / bot[r] 
             mat.weights = s
 
     def _update_als_factor(self, mode):
