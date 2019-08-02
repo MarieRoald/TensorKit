@@ -596,13 +596,13 @@ class CoupledTensors2(BaseDecomposedTensor):
 
     @property
     def coupled_factor_matrices(self):
-        """Returns the coupled factor matrices for the the coupled tensors.
+        """The coupled factor matrices for the the coupled tensors.
         """
         return [self.main_tensor.factor_matrices[i] for i in self.coupling_modes]
 
     @property
     def uncoupled_tensor_factors(self):
-        """Returns the uncoupeld factor matrices for the coupled tensors.
+        """The uncoupeld factor matrices for the coupled tensors.
         """
         uncoupled_factors = [None]*len(self.coupling_modes)
         for i, mode in enumerate(self.coupling_modes):
@@ -629,9 +629,8 @@ class CoupledTensors2(BaseDecomposedTensor):
         uncoupled_weights : list(list or np.array(int)), optional
             Weights of the coupeled tensors, must be in same order as uncoupled_tensor_factors, by default None
         """
-        #TODO: np.copy on the coupled matrices
+        #TODO: np.copy on the coupled matrices?
         main_weights = np.ones(self.rank) if main_weights is None else main_weights
-        #uncoupled_weights = [np.ones(self.rank) for _ in range(len(self.coupling_modes))] if uncoupled_weights is None else uncoupled_weights
         self.main_tensor = KruskalTensor(tensor_factors, weights=main_weights)
         self.coupled_tensors = []
         self.coupled_matrices = []
