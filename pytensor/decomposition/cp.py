@@ -259,36 +259,7 @@ class CP_ALS(BaseCP):
         num_modes = len(self.X.shape) # TODO: Should this be cashed?
         for mode in range(num_modes):
             self._update_als_factor(mode)
-
-    def _update_als_factors_ls(self):
-        # compute alle f_new
-        self.new_factor_matrices = []
-
-        for mode, new_factor in self.new_factor_matrices:
-            new_factor[mode][...] = self.new_step(self.factor_matrices[mode], 
-                                                  self.prev_factor_matrices[mode], 
-                                                  self.step_length)
-
-        new_loss = 1
-        curr_loss = 1
-
-        if new_loss < curr_loss:
-            self.factor_matrices[mode] = new_factor
-
-        for mode in range(num_modes):
-            self._update_als_factor(mode)
-
-        
-
-
-        # compute loss_new
-
-
-        # update factors
-
-        # store old factors?
-        pass
-    
+   
     def _update_convergence(self):
         self._rel_function_change = (self.prev_SSE - self.SSE)/self.prev_SSE
         self.prev_SSE = self.SSE 
