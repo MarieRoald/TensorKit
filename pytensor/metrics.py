@@ -134,6 +134,7 @@ def core_consistency_parafac2(X, P_k, A, F, C):
 
 
 
+"""
 def calculate_core_consistencies(X, upper_rank=5):
     core_consistencies = []
     for k in range(1, upper_rank + 1):
@@ -144,6 +145,7 @@ def calculate_core_consistencies(X, upper_rank=5):
         c = core_consistency(X, A, B, C)
         core_consistencies.append(c)
     return core_consistencies
+"""
 
 
 def leverage(factor_matrix):
