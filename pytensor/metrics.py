@@ -52,7 +52,7 @@ def factor_match_score(
     elif fms_reduction == "mean":
         fms_reduction = np.mean
     else:
-        raise ValueError('́`fms_reduction` must be either "min" or "mean".')
+        raise ValueError('`fms_reduction` must be either "min" or "mean".')
 
     rank = true_factors[0].shape[1]
     estimated_rank = estimated_factors[0].shape[1]
@@ -82,6 +82,13 @@ def tensor_completion_score(X, X_hat, W):
 def core_consistency(X, A, B, C, normalized=False):
     # TODO: generalise to more than three modes
     F = A.shape[1]
+
+
+
+
+
+
+
 
     # Create the superdiagonal tensor
     T = np.zeros((F,F,F))
