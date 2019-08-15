@@ -2,7 +2,6 @@
 import numpy as np
 import itertools
 from . import base
-from . import cp_old as cp
 import scipy
 from . import utils
 
