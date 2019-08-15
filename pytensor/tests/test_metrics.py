@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-from .. import metrics
-from ..decomposition.decompositions import Parafac2Tensor
+from pytensor import metrics
+from pytensor.decomposition.decompositions import Parafac2Tensor
 
 
 class TestCoreConsistency:
