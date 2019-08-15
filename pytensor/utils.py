@@ -1,7 +1,6 @@
 import numpy as np
 from copy import deepcopy
 from . import base
-from . import cp_old as cp
 
 
 def flip_factors(factor_matrices):
