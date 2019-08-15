@@ -271,13 +271,13 @@ class CP_ALS(BaseCP):
     def _fit(self):
         """Fit a CP model with Alternating Least Squares.
         """
-        for it in range(self.max_its):
+        for it in range(self.max_its - self.current_iteration):
             if abs(self._rel_function_change) < self.convergence_tol:
                 break
             self._update_als_factors()
             self._update_convergence()
             if it % self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'    {it}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, improvement is {self._rel_function_change:4g}')
+                print(f'    {self.current_iteration}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, improvement is {self._rel_function_change:4g}')
 
             self._after_fit_iteration()
 
