@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -102,6 +103,9 @@ class BaseCP(BaseDecomposer):
         elif self.init.lower() == 'precomputed':
             self._check_valid_components(initial_decomposition)
             self.decomposition = initial_decomposition
+
+        elif Path(self.init).is_file():
+            self.load_checkpoint(self.init)
 
         else:
             raise ValueError('Init method must be either `random`, `svd`, `from_checkpoint` or `precomputed`.')
