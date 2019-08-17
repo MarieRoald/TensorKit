@@ -7,9 +7,9 @@ import numpy as np
 class TestKruskalTensor:
     @pytest.fixture
     def random_3mode_ktensor(self):
-        A = np.random.randn(30, 3)
-        B = np.random.randn(40, 3)
-        C = np.random.randn(50, 3)
+        A = np.random.randn(30, 4)
+        B = np.random.randn(40, 4)
+        C = np.random.randn(50, 4)
 
         return decompositions.KruskalTensor([A, B, C])
     
@@ -44,9 +44,9 @@ class TestKruskalTensor:
             decompositions.KruskalTensor([A, B, C])
     
     def test_correct_size_of_tensor(self):
-        A = np.random.randn(30, 3)
-        B = np.random.randn(40, 3)
-        C = np.random.randn(50, 3)
+        A = np.random.randn(30, 4)
+        B = np.random.randn(40, 4)
+        C = np.random.randn(50, 4)
 
         ktensor = decompositions.KruskalTensor([A, B, C])
         assert ktensor.construct_tensor().shape == (30, 40, 50)
@@ -71,6 +71,36 @@ class TestKruskalTensor:
             for j, vector in enumerate(matrix):
                 for k, element in enumerate(vector):
                     assert abs(element - np.sum(A[i, :]*B[j, :]*C[k, :])) < 1e-8
+    
+    def test_sign_flip_yields_consistent_decomposition(self, random_3mode_ktensor):
+        X = random_3mode_ktensor.construct_tensor()
+        X += np.random.standard_normal(X.shape)*np.linalg.norm(X)*0.1
+        signs = random_3mode_ktensor.get_signs(X)
+
+        for rank in range(random_3mode_ktensor.rank):
+            sign_product = 1
+            for mode in range(3):
+                sign_product *= signs[mode][rank]
+            assert sign_product == 1
+    
+    def test_sign_flip_yields_same_sign_as_sign_score(self, random_3mode_ktensor):
+        X = random_3mode_ktensor.construct_tensor()
+        X += np.random.standard_normal(X.shape)*np.linalg.norm(X)*0.1
+        signs = random_3mode_ktensor.get_signs(X)
+        sign_scores = random_3mode_ktensor.get_sign_scores(X)
+
+        for rank in range(random_3mode_ktensor.rank):
+            sign_product = 1
+            num_equal_signs = 0
+            for mode in range(3):
+                sign_product *= np.sign(sign_scores[mode][rank])
+                num_equal_signs += np.sign(sign_scores[mode][rank]) == signs[mode][rank]
+            
+            if sign_product == -1:
+                assert num_equal_signs == 2
+            else:
+                assert num_equal_signs == 3
+
     
 
 class TestEvolvingTensor:

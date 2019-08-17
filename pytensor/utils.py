@@ -157,24 +157,42 @@ def prepare_for_comparison(factors):
     return normalized_factors, signs, norms
 
 
-def get_signs(X, factor_matrix, data_driven=True):
-    # TODO: hva om den er null?
-    if not data_driven:
-        return np.sign(factor_matrix.sum(axis=0))
+def get_signs(factor_matrix, X):
+    """Find the correct signs of the factor matrix.
+    If data matrix is not passed, then the sign is set so the factor mean is positive.
+    If the data matrix is passed, then the sign is set so the factors are positively
+    correlated with the data matrix.
 
-    S = np.linalg.lstsq(factor_matrix, X)[0]
-    signs = np.zeros(factor_matrix.shape[1])
-    for r in range(factor_matrix.shape[1]):
-        signs[r] = np.sign(np.sum(S[r]**2 * np.sign(S[r]))).astype(factor_matrix.dtype)
-        # signs[r] = np.sign(np.sum(S[r])).astype(factor_matrix.dtype)  <- This did not work either
+    Arguments
+    ---------
+    factor_matrix : np.ndarray
+        Factor matrix with unknown sign
+    X : np.ndarray
+        Data matrix
+
+    Returns
+    -------
+    sign : int
+    sign_weight : float
+    """
+    if X is None:
+        sign_weight = factor_matrix.sum(axis=0)
+        sign_weight[sign_weight == 0] = 1
+        return np.sign(sign_weight), sign_weight
+
+    X_described_by_factors = np.linalg.lstsq(factor_matrix, X)[0]
+    sign_weight = np.sum(
+        np.sign(X_described_by_factors) * X_described_by_factors**2,
+        axis=1
+    )
+
+    return np.sign(sign_weight), sign_weight
     
-    return signs
-
 def signfix_evolving_factors(data_tensor, evolving_factor, evolve_over_factor, data_driven=True):
     fixed_evolving_factor = evolving_factor.copy()
     fixed_evolve_over_factor = evolve_over_factor.copy()
     for k in range(len(evolving_factor)):
-        signs = get_signs(data_tensor[k], evolving_factor[k], data_driven=data_driven)
+        signs = get_signs(data_tensor[k], evolving_factor[k], data_driven=data_driven)[0]
         
         fixed_evolving_factor[k] *= signs
         fixed_evolve_over_factor[k] *= signs
@@ -183,12 +201,11 @@ def signfix_evolving_factors(data_tensor, evolving_factor, evolve_over_factor, d
 
 def signfix_normal_factors(data_tensor, fixing_factors, flipping_factors, data_driven=True):
     unfolded_data_tensor = data_tensor.reshape(data_tensor.shape[0], -1)
-    signs = get_signs(unfolded_data_tensor, fixing_factors, data_driven)
+    signs = get_signs(unfolded_data_tensor, fixing_factors, data_driven)[0]
     
     return fixing_factors*signs[np.newaxis], flipping_factors*signs[np.newaxis]
 
 def fix_signs_evolving_tensor(evolving_tensor, data_tensor):
-
     evolving_factor = evolving_tensor.B
     evolve_over_factor = evolving_tensor.C
 

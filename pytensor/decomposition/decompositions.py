@@ -3,6 +3,7 @@ import h5py
 from abc import ABC, abstractmethod, abstractclassmethod
 from .. import base
 from .. import metrics
+from .. import utils
 
 
 class BaseDecomposedTensor(ABC):
@@ -163,6 +164,33 @@ class KruskalTensor(BaseDecomposedTensor):
                                           decomposition.factor_matrices, 
                                           weight_penalty=weight_penalty, 
                                           fms_reduction=fms_reduction)
+    
+    def get_sign_scores(self, X):
+        sign_scores = []
+        for n, factor_matrix in enumerate(self.factor_matrices):
+            sign_scores.append(utils.get_signs(factor_matrix, base.unfold(X, n))[1])
+        
+        return sign_scores
+    
+    def get_signs(self, X):
+        sign_scores = self.get_sign_scores(X)
+        signs = [np.ones(self.rank, dtype=int) for _ in self.factor_matrices]
+        for rank in range(self.rank):
+            single_rank_sign_scores = [
+                single_mode_sign_scores[rank] for single_mode_sign_scores in sign_scores
+            ]
+
+            for factor_num, factor_sign_score in enumerate(single_rank_sign_scores):
+                signs[factor_num][rank] = np.sign(factor_sign_score)
+
+            # Find the mode that should not be flipped
+            single_rank_signs = np.sign(single_rank_sign_scores)
+            if np.prod(single_rank_signs) == -1:
+                wrongly_flipped = np.argmin(np.abs(single_rank_sign_scores))
+                signs[wrongly_flipped][rank] *= -1
+        
+        return signs
+            
 
 
 class EvolvingTensor(BaseDecomposedTensor):
