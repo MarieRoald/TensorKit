@@ -1,5 +1,5 @@
 """
-Contains the base class for all decomposition methods in PyTensor
+Contains the base class for all decomposition methods in TensorKit
 """
 
 

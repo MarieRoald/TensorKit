@@ -7,9 +7,9 @@ import h5py
 import pytest
 import numpy as np
 from .test_utils import ensure_monotonicity
-from .. import cp
-from .. import decompositions
-from ... import metrics
+from tenkit.decomposition import cp
+from tenkit.decomposition import decompositions
+from tenkit import metrics
 # Husk: Test at weights og factors endres inplace
 
 

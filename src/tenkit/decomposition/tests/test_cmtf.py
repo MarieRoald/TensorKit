@@ -4,10 +4,10 @@ import tempfile
 import h5py
 import pytest
 import numpy as np
-from .. import cp
-from .. import decompositions
-from ... import metrics
-from .. import cmtf
+from tenkit.decomposition import cp
+from tenkit.decomposition import decompositions
+from tenkit import metrics
+from tenkit.decomposition import cmtf
 
 np.random.seed(0)
 

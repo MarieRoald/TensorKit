@@ -82,7 +82,7 @@ class BaseCP(BaseDecomposer):
 
         Arguments:
         ----------
-        initial_decompostion: pytensor.decomposition.decompositions.KruskalTensor or str (optional)
+        initial_decompostion: tenkit.decomposition.decompositions.KruskalTensor or str (optional)
             The initial KruskalTensor (init=precomputed) to use or the path of the 
             logfile to load (init=from_file).
         """
@@ -125,7 +125,7 @@ class BaseCP(BaseDecomposer):
             Ignored, included to follow sklearn standards.
         max_its : int (optional)
             If set, then this will override the class's max_its.
-        initial_decomposition : pytensor.decomposition.decompositions.KruskalTensor or str
+        initial_decomposition : tenkit.decomposition.decompositions.KruskalTensor or str
             The initial KruskalTensor (init=precomputed) to use or the path of the 
             logfile to load (init=from_file).
         """

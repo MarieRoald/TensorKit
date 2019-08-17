@@ -7,10 +7,10 @@ import numpy as np
 import h5py
 
 from .test_utils import ensure_monotonicity
-from .. import parafac2
-from .. import decompositions
-from ... import base
-from ... import metrics
+from tenkit.decomposition import parafac2
+from tenkit.decomposition import decompositions
+from tenkit import base
+from tenkit import metrics
 # Husk: Test at weights og factors endres inplace
 # TODO: test factor match score
 

@@ -108,7 +108,7 @@ class CMTF_ALS(CP_ALS):
             Ignored, included to follow sklearn standards.
         max_its : int (optional)
             If set, then this will override the class's max_its.
-        initial_decomposition : pytensor.decomposition.decomposer.KruskalTensor or str
+        initial_decomposition : tenkit.decomposition.decomposer.KruskalTensor or str
             The initial KruskalTensor (init=precomputed) to use or the path of the 
             logfile to load (init=from_file).
         """

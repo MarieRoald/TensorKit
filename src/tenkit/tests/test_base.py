@@ -1,7 +1,7 @@
 import tempfile
 import pytest
 import numpy as np
-from .. import base
+from tenkit import base
 from functools import partial
 
 

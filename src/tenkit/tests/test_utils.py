@@ -1,4 +1,4 @@
-from pytensor import utils
+from tenkit import utils
 import numpy as np
 
 def test_get_signs():

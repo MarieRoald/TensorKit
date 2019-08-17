@@ -1,5 +1,5 @@
 import pytest
-from .. import decompositions
+from tenkit.decomposition import decompositions
 import tempfile
 import numpy as np
 
