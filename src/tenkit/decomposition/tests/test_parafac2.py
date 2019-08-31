@@ -21,6 +21,14 @@ class TestParafac2ALS:
         #pf2tensor.normalize_components()
         return pf2tensor
     
+    def test_rank4_decomposition_cp_init(self, rank4_parafac2_tensor):
+        X = (rank4_parafac2_tensor.construct_tensor())
+        parafac2_als = parafac2.Parafac2_ALS(4, max_its=1000, convergence_tol=1e-10, print_frequency=1000, init='cp')
+        estimated_pf2tensor = parafac2_als.fit_transform(X)
+        estimated_X = estimated_pf2tensor.construct_tensor()
+
+        assert np.allclose(X, estimated_X, rtol=1e-5, atol=1)
+
     def test_rank4_decomposition(self, rank4_parafac2_tensor):
         X = (rank4_parafac2_tensor.construct_tensor())
         parafac2_als = parafac2.Parafac2_ALS(4, max_its=1000, convergence_tol=1e-10, print_frequency=1000)

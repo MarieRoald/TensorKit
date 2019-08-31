@@ -60,16 +60,29 @@ class BaseParafac2(BaseDecomposer):
         blueprint_B = np.identity(self.rank)
         C = np.ones((K, self.rank))
 
-        P = np.eye(J, self.rank)
+        P = [np.eye(J, self.rank) for k in range(K)]
         self.decomposition = self.DecompositionType(A, blueprint_B, C, P)
 
         self._update_projection_matrices()
+    
+    def init_cp(self):
+        """CP initialisation. Input must be a tensor.
+        """
+        X = np.asarray(self.X)
+        cp_als = cp.CP_ALS(self.rank, 20)
+        cp_als.fit(X)
+        C, A, B = cp_als.factor_matrices
+        P, blueprint_B = np.linalg.qr(B)
+        P = [P for _ in range(len(self.X))]
+        self.decomposition = self.DecompositionType(A, blueprint_B, C, P)
 
     def init_components(self, initial_decomposition=None):
         if self.init.lower() == 'svd':
             self.init_svd()
         elif self.init.lower() == 'random':
             self.init_random()
+        elif self.init.lower() == 'cp':
+            self.init_cp()
         elif self.init.lower() == 'from_checkpoint':
             self.load_checkpoint(initial_decomposition)
         elif self.init.lower() == 'precomputed':
