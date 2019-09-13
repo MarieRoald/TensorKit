@@ -277,7 +277,7 @@ class CP_ALS(BaseCP):
             self._update_als_factors()
             self._update_convergence()
 
-            if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
+            if self.print_frequency > 0 and self.current_iteration % self.print_frequency == 0:
                 print(f'    {self.current_iteration}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, improvement is {self._rel_function_change:4g}')
 
             self._after_fit_iteration()
