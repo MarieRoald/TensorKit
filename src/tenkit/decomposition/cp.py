@@ -195,7 +195,7 @@ class CP_ALS(BaseCP):
         loggers=None,
         checkpoint_frequency=None,
         checkpoint_path=None,
-        print_frequency=10,
+        print_frequency=0,
         non_negativity_constraints=None,
         ridge_penalties=None
     ):
