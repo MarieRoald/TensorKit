@@ -100,6 +100,17 @@ class TestKruskalTensor:
                 assert num_equal_signs == 2
             else:
                 assert num_equal_signs == 3
+        
+    def test_get_single_component_decomposition(self, random_3mode_ktensor):
+        factor_matrices = random_3mode_ktensor.factor_matrices
+        for component in range(4):
+            single_component_decomposition = (
+                random_3mode_ktensor.get_single_component_decomposition(component)
+            )
+            for fm1, fm2 in zip(factor_matrices, single_component_decomposition.factor_matrices):
+                assert np.allclose(fm1[:, component], fm2[:, 0])
+            assert random_3mode_ktensor.weights[component] == single_component_decomposition.weights[0]
+            assert single_component_decomposition.rank == 1
 
     
 
