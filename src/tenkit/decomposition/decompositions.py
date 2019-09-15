@@ -173,6 +173,7 @@ class KruskalTensor(BaseDecomposedTensor):
         return sign_scores
     
     def get_signs(self, X):
+
         sign_scores = self.get_sign_scores(X)
         signs = [np.ones(self.rank, dtype=int) for _ in self.factor_matrices]
         for rank in range(self.rank):
@@ -192,6 +193,21 @@ class KruskalTensor(BaseDecomposedTensor):
         return signs
             
 
+    def get_single_component_decomposition(self, component):
+        factor_matrices = self.factor_matrices
+        weights = self.weights
+        DecompositionType = type(self)
+
+        single_component_factor_matrices = [
+            factor_matrix[:, component, np.newaxis] for factor_matrix in factor_matrices
+        ]
+        single_component_weights = [weights[component]]
+
+        single_component_decomposition = DecompositionType(
+            factor_matrices = single_component_factor_matrices,
+            weights = single_component_weights
+        )
+        return single_component_decomposition
 
 class EvolvingTensor(BaseDecomposedTensor):
     B_template = "B_{:03d}"
@@ -328,7 +344,11 @@ class ProjectedFactor:
         self.projection_matrices = projection_matrices
     
     def __getitem__(self, k):
-        return self.projection_matrices[k]@self.factor
+        slice_ = slice(None, None, None)
+        if isinstance(k, tuple):
+            slice_ = tuple(ki for ki in k[1:])
+            k = k[0]
+        return (self.projection_matrices[k]@self.factor)[slice_]
     
     def __len__(self):
         return len(self.projection_matrices)
