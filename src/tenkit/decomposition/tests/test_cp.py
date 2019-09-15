@@ -102,4 +102,3 @@ class TestCPALS:
                 assert np.allclose(fm1, fm2)
             
             assert np.allclose(cp_als.decomposition.weights, cp_als2.decomposition.weights)
-        
