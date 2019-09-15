@@ -248,3 +248,9 @@ def factor_match_score_parafac2(
             max_fms = fms
             best_permutation = permutation
     return max_fms, best_permutation
+
+
+def percent_explained(true_tensor, estimated_tensor):
+    SSE = np.linalg.norm(true_tensor-estimated_tensor)**2
+    SSX = np.linalg.norm(true_tensor)**2
+    return 1 - SSE/SSX
