@@ -74,7 +74,7 @@ class KruskalTensor(BaseDecomposedTensor):
                     f'There must be as many weights as there are columns in the factor matrices.'
                     f'The factor matrices has {self.rank} columns, but there are {len(weights)} weights.'
                 )
-        self.weights = weights
+        self.weights = np.asarray(weights)
     
     @property
     def shape(self):
