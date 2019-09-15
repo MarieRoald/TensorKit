@@ -203,7 +203,7 @@ class KruskalTensor(BaseDecomposedTensor):
         ]
         single_component_weights = [weights[component]]
 
-        single_component_decomposition = DecompositionType(
+        single_component_decomposition = KruskalTensor(
             factor_matrices = single_component_factor_matrices,
             weights = single_component_weights
         )
