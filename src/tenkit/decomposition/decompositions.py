@@ -486,3 +486,15 @@ class Parafac2Tensor(EvolvingTensor):
                                           factors2, 
                                           weight_penalty=weight_penalty, 
                                           fms_reduction=fms_reduction)
+
+    def get_single_component_decomposition(self, component):
+        A = self.A[:, component, np.newaxis]
+        B = self.B[:, component, np.newaxis]
+        C = self.C[:, component, np.newaxis]
+
+        single_component_decomposition = EvolvingTensor(
+            A = A,
+            B = B,
+            C = C,
+        )
+        return single_component_decomposition
