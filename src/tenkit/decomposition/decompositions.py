@@ -489,7 +489,7 @@ class Parafac2Tensor(EvolvingTensor):
 
     def get_single_component_decomposition(self, component):
         A = self.A[:, component, np.newaxis]
-        B = self.B[:, component, np.newaxis]
+        B = self.B[:, ..., component, np.newaxis]
         C = self.C[:, component, np.newaxis]
 
         single_component_decomposition = EvolvingTensor(
