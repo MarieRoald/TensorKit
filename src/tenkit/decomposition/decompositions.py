@@ -209,6 +209,13 @@ class KruskalTensor(BaseDecomposedTensor):
         )
         return single_component_decomposition
 
+    def degeneracy(self):
+        degeneracy_scores = np.ones(shape=(self.rank, self.rank))
+        for factor_matrix in self.factor_matrices:
+            degeneracy_scores *= metrics._tucker_congruence(factor_matrix, factor_matrix)
+
+        return degeneracy_scores
+
 class EvolvingTensor(BaseDecomposedTensor):
     B_template = "B_{:03d}"
     def __init__(self, A, B, C, all_same_size=True, warning=True):
@@ -247,7 +254,11 @@ class EvolvingTensor(BaseDecomposedTensor):
     @property
     def A(self):
         return self._A
-    
+
+    @property
+    def B_unfolded(self):
+        return np.concatenate(list(self.B), axis=0)
+
     @property
     def B(self):
         return self._B
@@ -336,6 +347,20 @@ class EvolvingTensor(BaseDecomposedTensor):
             return self.C
         else:
             raise IndexError
+
+    def degeneracy(self):
+        degeneracy_scores = np.ones(shape=(self.rank, self.rank))
+        for factor_matrix in [self.A, self.B_unfolded, self.C]:
+            degeneracy_scores *= metrics._tucker_congruence(factor_matrix, factor_matrix)
+
+        return degeneracy_scores
+
+    def factor_match_score(self, decomposition, weight_penalty=True, fms_reduction='min'):
+        assert decomposition.rank == self.rank
+        return metrics.factor_match_score([self.A, self.B_unfolded, self.C], 
+                                          [decomposition.A, decomposition.B_unfolded, decomposition.C], 
+                                          weight_penalty=weight_penalty, 
+                                          fms_reduction=fms_reduction)
         
         
 class ProjectedFactor:
