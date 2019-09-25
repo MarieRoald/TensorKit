@@ -18,6 +18,7 @@ class BaseCP(BaseDecomposer):
         rank,
         max_its,
         convergence_tol=1e-10,
+        rel_loss_tol=1e-10,
         init='random',
         loggers=None,
         checkpoint_frequency=None,
@@ -34,6 +35,7 @@ class BaseCP(BaseDecomposer):
         self.convergence_tol = convergence_tol
         self.init = init
         self.ridge_penalties = ridge_penalties
+        self.rel_loss_tol = rel_loss_tol
 
     def init_random(self):
         """Random initialisation of the factor matrices.
@@ -114,6 +116,26 @@ class BaseCP(BaseDecomposer):
     def _fit(self):
         pass
 
+    @property
+    def SSE(self):
+        """Sum Squared Error"""
+        if hasattr(self, '_last_updated_mode') and self._last_updated_mode is not None:
+            # ||X - Y||_F^2 = ||X||_F^2 + ||Y||_F^2 - 2<X, Y>_F
+            # Y = [U_0, U_1, U_2], <X, Y> = sum(U_i*mttkrp(X, Y, skip=i))
+            
+            return (
+                self.X_norm**2
+                 + np.linalg.norm(self.reconstructed_X)**2
+                 - 2*self._inner_prod_X_reconstructed_X
+            )
+            
+        return np.linalg.norm(self.X - self.reconstructed_X)**2
+
+    @property
+    def _inner_prod_X_reconstructed_X(self):
+        M = self.factor_matrices[self._last_updated_mode]*self._matrix_khatri_rao_product_cache
+        return np.sum(self.weights*M.sum(0), axis=0)
+
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
 
@@ -156,13 +178,10 @@ class BaseCP(BaseDecomposer):
 
     @property
     def loss(self):
-        loss = self.SSE #TODO: skal det være property?
+        loss = self.SSE
         if self.ridge_penalties is not None:
             for ridge, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
-                print('loss')
-                print(ridge)
-                print(np.prod(factor_matrix.shape))
-                ridge /= np.prod(factor_matrix.shape)
+                #ridge /= np.prod(factor_matrix.shape)
                 loss += ridge*np.linalg.norm(factor_matrix)**2
         return loss
    
@@ -191,6 +210,7 @@ class CP_ALS(BaseCP):
         rank,
         max_its,
         convergence_tol=1e-10,
+        rel_loss_tol=1e-10,
         init='random',
         loggers=None,
         checkpoint_frequency=None,
@@ -203,6 +223,7 @@ class CP_ALS(BaseCP):
             rank=rank,
             max_its=max_its,
             convergence_tol=convergence_tol,
+            rel_loss_tol=rel_loss_tol,
             init=init,
             loggers=loggers,
             checkpoint_frequency=checkpoint_frequency,
@@ -220,6 +241,9 @@ class CP_ALS(BaseCP):
 
         self._rel_function_change = np.inf
         self.prev_SSE = self.SSE
+
+        self._matrix_khatri_rao_product_cache = None
+        # self._matrix_khatri_rao_product_cache = [np.empty_like(factor) for factor in self.factor_matrices]
 
     def _get_als_lhs(self, skip_mode):
         """Compute left hand side of least squares problem."""
@@ -240,11 +264,8 @@ class CP_ALS(BaseCP):
         
         if self.ridge_penalties is not None:
             ridge_penalty = self.ridge_penalties[mode]
-            fm_shape = np.prod(self.factor_matrices[mode].shape)
-            print('get rightsolve', mode)
-            print(ridge_penalty)
-            print(fm_shape)
-            rightsolve = base.add_rightsolve_ridge(rightsolve, ridge_penalty/fm_shape)
+            # fm_shape = np.prod(self.factor_matrices[mode].shape)
+            rightsolve = base.add_rightsolve_ridge(rightsolve, ridge_penalty)#/fm_shape)
 
         return rightsolve
 
@@ -254,6 +275,9 @@ class CP_ALS(BaseCP):
         rhs = self._get_als_rhs(mode)
 
         rightsolve = self._get_rightsolve(mode)
+
+        self._last_updated_mode = mode
+        self._matrix_khatri_rao_product_cache = rhs
 
         new_factor = rightsolve(lhs, rhs)
         self.factor_matrices[mode][...] = new_factor
@@ -272,7 +296,11 @@ class CP_ALS(BaseCP):
         """Fit a CP model with Alternating Least Squares.
         """
         for it in range(self.max_its - self.current_iteration):
-            if abs(self._rel_function_change) < self.convergence_tol:
+            rel_loss = self.SSE/self.X_norm**2
+            if (
+                abs(self._rel_function_change) < self.convergence_tol 
+                or rel_loss < self.rel_loss_tol
+            ):
                 break
             self._update_als_factors()
             self._update_convergence()
@@ -283,8 +311,6 @@ class CP_ALS(BaseCP):
             self._after_fit_iteration()
 
 
-        if (it+1) % self.checkpoint_frequency != 0:
-            self.store_checkpoint()
 
     def init_random(self):
         super().init_random()
