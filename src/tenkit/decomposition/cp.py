@@ -310,7 +310,8 @@ class CP_ALS(BaseCP):
 
             self._after_fit_iteration()
 
-
+        if ((it+1) % self.checkpoint_frequency != 0) and (self.checkpoint_frequency > 0):
+            self.store_checkpoint()
 
     def init_random(self):
         super().init_random()
