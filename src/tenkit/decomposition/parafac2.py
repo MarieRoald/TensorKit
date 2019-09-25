@@ -212,6 +212,7 @@ class Parafac2_ALS(BaseParafac2):
         non_negativity_constraints=None,
         print_frequency=10,
         cp_updates_per_it=5,
+        ridge_penalties=None
     ):
         super().__init__(
             rank,
@@ -225,6 +226,7 @@ class Parafac2_ALS(BaseParafac2):
         self.non_negativity_constraints = non_negativity_constraints
         self.print_frequency = print_frequency
         self.cp_updates_per_it = cp_updates_per_it
+        self.ridge_penalties = ridge_penalties
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
@@ -236,6 +238,7 @@ class Parafac2_ALS(BaseParafac2):
         self.cp_decomposer = cp.CP_ALS(self.rank, max_its=1000, 
                                        convergence_tol=0, print_frequency=-1, 
                                        non_negativity_constraints=self.non_negativity_constraints,
+                                       ridge_penalties=self.ridge_penalties,
                                        init='precomputed')
         self.cp_decomposer._init_fit(X=self.projected_X, max_its=np.inf, initial_decomposition=self.cp_decomposition)
 
