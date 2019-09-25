@@ -10,6 +10,11 @@ def weight_score(weight1, weight2):
     return np.abs(weight1 - weight2) / max(weight1, weight2)
 
 
+def _tucker_congruence(A1, A2):      
+    A1_normalised = A1/np.linalg.norm(A1, axis=0)
+    A2_normalised = A2/np.linalg.norm(A2, axis=0)
+    return A1_normalised.T@A2_normalised                             
+
 def _factor_match_score(true_factors, estimated_factors, weight_penalty=True, nonnegative=True):
 
     if len(true_factors[0].shape) == 1:
