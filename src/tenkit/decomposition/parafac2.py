@@ -230,7 +230,7 @@ class Parafac2_ALS(BaseParafac2):
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self.prev_loss = self.self.loss
+        self.prev_loss = self.loss
         self._rel_function_change = np.inf
 
     def _prepare_cp_decomposer(self):
