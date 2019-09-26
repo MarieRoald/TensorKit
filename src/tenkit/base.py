@@ -252,7 +252,7 @@ def flatten_factors(factor_matrices):
 
     Inverted by ``unflatten_factors``.
     """
-    sizes = [np.prod(factor.shape) for factor in factors]
+    sizes = [np.prod(factor.shape) for factor in factor_matrices]
     offsets = np.cumsum([0] + sizes)[:-1]
     flattened = np.empty(np.sum(sizes))
     for offset, size, factor in zip(offsets, sizes, factor_matrices):
