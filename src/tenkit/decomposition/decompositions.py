@@ -165,6 +165,10 @@ class KruskalTensor(BaseDecomposedTensor):
                                           weight_penalty=weight_penalty, 
                                           fms_reduction=fms_reduction)
     
+    def seperate_mode_factor_match_score(self, decomposition, fms_reduction='min'):
+        return metrics.seperate_mode_factor_match_score(self.factor_matrices,
+                                                        decomposition.factor_matrices, 
+                                                        fms_reduction=fms_reduction)
     def get_sign_scores(self, X):
         sign_scores = []
         for n, factor_matrix in enumerate(self.factor_matrices):
@@ -215,6 +219,7 @@ class KruskalTensor(BaseDecomposedTensor):
             degeneracy_scores *= metrics._tucker_congruence(factor_matrix, factor_matrix)
 
         return degeneracy_scores
+        
 
 class EvolvingTensor(BaseDecomposedTensor):
     B_template = "B_{:03d}"
@@ -243,6 +248,26 @@ class EvolvingTensor(BaseDecomposedTensor):
         self.all_same_size = self.check_all_same_size(B)
         self.slice_shapes = [(self.A.shape[0], B_k.shape[0]) for B_k in self.B]
         self.num_elements = sum((shape[1] for shape in self.slice_shapes))
+
+    @classmethod
+    def from_kruskaltensor(cls, ktensor, allow_same_class=False):
+        if allow_same_class:
+            if isinstance(ktensor, cls):
+                return ktensor
+
+        if len(ktensor.factor_matrices) != 3:
+            raise ValueError('Kruskal tensor must be third order to be converted into an evolving tensor')
+        A = ktensor.factor_matrices[0]
+        B = ktensor.factor_matrices[1]
+        C = ktensor.factor_matrices[2]
+
+        B = np.ones((len(C), 1, 1))*B[np.newaxis]
+
+        return cls(A, B, C)
+
+    @classmethod
+    def from_factor_matrices(cls, factor_matrices):
+        return cls(factor_matrices[0], factor_matrices[1], factor_matrices[2])
 
     def check_all_same_size(self, matrices):
         size = matrices[0].shape[0]
@@ -356,12 +381,18 @@ class EvolvingTensor(BaseDecomposedTensor):
         return degeneracy_scores
 
     def factor_match_score(self, decomposition, weight_penalty=True, fms_reduction='min'):
-        assert decomposition.rank == self.rank
         return metrics.factor_match_score([self.A, self.B_unfolded, self.C], 
                                           [decomposition.A, decomposition.B_unfolded, decomposition.C], 
                                           weight_penalty=weight_penalty, 
                                           fms_reduction=fms_reduction)
-        
+
+    def separate_mode_factor_match_score(self, decomposition, fms_reduction='min'):
+        if not isinstance(decomposition, EvolvingTensor):
+            decomposition = decomposition.to_evolving_tensor()
+        return metrics.seperate_mode_factor_match_score([self.A, self.B_unfolded, self.C],
+                                                      [decomposition.A, decomposition.B_unfolded, decomposition.C], 
+                                                       fms_reduction=fms_reduction)
+
         
 class ProjectedFactor:
     def __init__(self, factor, projection_matrices):

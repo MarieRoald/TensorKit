@@ -78,6 +78,42 @@ def factor_match_score(
             best_permutation = permutation
     return max_fms, best_permutation
 
+def separate_mode_factor_match_score(true_factors, estimated_factors, fms_reduction='min'):
+    if fms_reduction == "min":
+        fms_reduction = np.min
+    elif fms_reduction == "mean":
+        fms_reduction = np.mean
+    else:
+        raise ValueError('`fms_reduction` must be either "min" or "mean".')
+
+    rank = true_factors[0].shape[1]
+    estimated_rank = estimated_factors[0].shape[1]
+
+
+    max_fms = []
+    best_permutation = []
+
+    for true_factor, estimated_factor in zip(true_factors, estimated_factors):
+        current_max_fms = -1
+        current_best_permutation = None
+        for permutation in itertools.permutations(range(estimated_rank), r=rank):
+            permuted_factor = utils.permute_factors(permutation, [estimated_factor])
+
+            fms = fms_reduction(
+                _factor_match_score(
+                    [true_factor], permuted_factor, weight_penalty=False
+                )
+            )
+
+            if fms > max_fms:
+                current_max_fms = fms
+                current_best_permutation = permutation
+        
+        max_fms.append(current_max_fms)
+        best_permutation.append(current_best_permutation)
+    return max_fms, best_permutation
+
+
 
 def tensor_completion_score(X, X_hat, W):
     return np.linalg.norm((1 - W) * (X - X_hat)) / np.linalg.norm((1 - W) * X)
