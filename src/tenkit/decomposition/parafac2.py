@@ -230,7 +230,7 @@ class Parafac2_ALS(BaseParafac2):
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self.prev_SSE = self.SSE
+        self.prev_loss = self.self.loss
         self._rel_function_change = np.inf
 
     def _prepare_cp_decomposer(self):
@@ -268,9 +268,9 @@ class Parafac2_ALS(BaseParafac2):
             self.store_checkpoint()
 
     def _update_convergence(self):
-        SSE = self.SSE
-        self._rel_function_change = (self.prev_SSE - SSE)/self.prev_SSE
-        self.prev_SSE = SSE
+        loss = self.loss
+        self._rel_function_change = (self.prev_loss - loss)/self.prev_loss
+        self.prev_loss = loss
 
     def _update_parafac2_factors(self):
         #print('Before projection update') 
@@ -289,3 +289,11 @@ class Parafac2_ALS(BaseParafac2):
         #print(f'The MSE is {self.MSE: 4f}, f is {self.loss:4f}')
         # from pdb import set_trace; set_trace()
 
+    @property
+    def loss(self):
+        loss = self.SSE
+        if self.ridge_penalties is not None:
+            factor_matrices = [self.decomposition.A, self.decomposition.blueprint_B, self.decomposition.C]
+            for factor, penalty in zip(factor_matrices, self.ridge_penalties):
+                loss += penalty*np.linalg.norm(factor)**2
+        return loss
