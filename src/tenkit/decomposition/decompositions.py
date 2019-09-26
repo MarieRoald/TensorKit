@@ -263,7 +263,7 @@ class EvolvingTensor(BaseDecomposedTensor):
 
         B = np.ones((len(C), 1, 1))*B[np.newaxis]
 
-        return cls(A, B, C)
+        return cls(C, B, A)
 
     @classmethod
     def from_factor_matrices(cls, factor_matrices):
