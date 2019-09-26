@@ -105,7 +105,7 @@ def separate_mode_factor_match_score(true_factors, estimated_factors, fms_reduct
                 )
             )
 
-            if fms > max_fms:
+            if fms > current_max_fms:
                 current_max_fms = fms
                 current_best_permutation = permutation
         
