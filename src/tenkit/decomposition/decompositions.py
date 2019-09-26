@@ -389,7 +389,7 @@ class EvolvingTensor(BaseDecomposedTensor):
     def separate_mode_factor_match_score(self, decomposition, fms_reduction='min'):
         if not isinstance(decomposition, EvolvingTensor):
             decomposition = decomposition.to_evolving_tensor()
-        return metrics.seperate_mode_factor_match_score([self.A, self.B_unfolded, self.C],
+        return metrics.separate_mode_factor_match_score([self.A, self.B_unfolded, self.C],
                                                       [decomposition.A, decomposition.B_unfolded, decomposition.C], 
                                                        fms_reduction=fms_reduction)
 
