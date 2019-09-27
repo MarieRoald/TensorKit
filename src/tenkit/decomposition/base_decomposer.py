@@ -52,7 +52,7 @@ class BaseDecomposer(ABC):
     @property
     def explained_variance(self):
         # TODO: Cache result
-        return 1 - self.SSE/np.linalg.norm(self.X)**2
+        return 1 - self.SSE/self.X_norm**2
 
     @property
     def SSE(self):
