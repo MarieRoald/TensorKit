@@ -176,24 +176,11 @@ class BaseParafac2(BaseDecomposer):
             C = self.decomposition.C
             blueprint_B = self.decomposition.blueprint_B
 
-            U, S, Vh = np.linalg.svd(self.X[k].T@((C[k]*A)@blueprint_B.T), full_matrices=False)
-            S_tol = max(U.shape) * S[0] * (1e-16)
-            # C[:, k]*A is equivalent to A@np.diag(C[:, k])
-            should_keep = np.diag(S > S_tol).astype(float)
+            self.decomposition.projection_matrices[k][...] = base.orthogonal_solve(
+                (C[k]*A)@blueprint_B.T,
+                self.X[k]
+            ).T
 
-            self.decomposition.projection_matrices[k][...] = (Vh.T @ should_keep @ U.T).T
-
-"""
-            U, S, Vh = np.linalg.svd(
-                self.decomposition.blueprint_B @ self.decomposition.D[..., k] \
-                @ (self.decomposition.A.T @ self.X[k].T), full_matrices=False
-            )
-
-            S_tol = max(U.shape) * S[0] * (1e-16)
-            should_keep = np.diag(S > S_tol).astype(float)
-
-            self.decomposition.projection_matrices[k][...] = Vh.T @ should_keep @ U.T
-"""            
             # Should_keep = diag([1, 1, ..., 1, 0, 0, ..., 0]) -> the zeros correspond to small singular values
             # Following Rasmus Bro's PARAFAC2 MATLAB script, which sets P_k = Q_k(Q_k'Q_k)^(-0.5) (line 524)
             #      Where the power is done by truncating very small singular values (for numerical stability)
@@ -212,7 +199,8 @@ class Parafac2_ALS(BaseParafac2):
         non_negativity_constraints=None,
         print_frequency=10,
         cp_updates_per_it=5,
-        ridge_penalties=None
+        ridge_penalties=None,
+        orthogonality_constraints=None
     ):
         super().__init__(
             rank,
@@ -227,6 +215,7 @@ class Parafac2_ALS(BaseParafac2):
         self.print_frequency = print_frequency
         self.cp_updates_per_it = cp_updates_per_it
         self.ridge_penalties = ridge_penalties
+        self.orthogonality_constraints = orthogonality_constraints
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
@@ -239,6 +228,7 @@ class Parafac2_ALS(BaseParafac2):
                                        convergence_tol=0, print_frequency=-1, 
                                        non_negativity_constraints=self.non_negativity_constraints,
                                        ridge_penalties=self.ridge_penalties,
+                                       orthogonality_constraints=self.orthogonality_constraints,
                                        init='precomputed')
         self.cp_decomposer._init_fit(X=self.projected_X, max_its=np.inf, initial_decomposition=self.cp_decomposition)
 
