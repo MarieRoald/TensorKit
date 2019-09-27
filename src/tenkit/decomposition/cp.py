@@ -217,7 +217,8 @@ class CP_ALS(BaseCP):
         checkpoint_path=None,
         print_frequency=0,
         non_negativity_constraints=None,
-        ridge_penalties=None
+        ridge_penalties=None,
+        orthogonality_constraints=None,
     ):
         super().__init__(
             rank=rank,
@@ -232,12 +233,20 @@ class CP_ALS(BaseCP):
         )
         self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
+        self.orthogonality_constraints = orthogonality_constraints
+
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.decomposition.reset_weights()
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False]*len(self.factor_matrices)
+        if self.orthogonality_constraints is None:
+            self.orthogonality_constraints = [False]*len(self.factor_matrices)
+        for mode, (orthogonality) in enumerate(self.orthogonality_constraints):
+            fm = self.decomposition.factor_matrices[mode]
+            if orthogonality:
+                self.decomposition.factor_matrices[mode] = np.linalg.qr(fm)[0]
 
         self._rel_function_change = np.inf
         self.prev_SSE = self.SSE
@@ -262,10 +271,17 @@ class CP_ALS(BaseCP):
         if self.non_negativity_constraints[mode]:
             rightsolve = base.non_negative_rightsolve
         
+        if self.orthogonality_constraints[mode]:
+            if self.non_negativity_constraints[mode]:
+                raise ValueError('Cannot perform nonnegative orthogonal solve')
+
+            rightsolve = base.orthogonal_rightsolve
+
         if self.ridge_penalties is not None:
             ridge_penalty = self.ridge_penalties[mode]
             # fm_shape = np.prod(self.factor_matrices[mode].shape)
             rightsolve = base.add_rightsolve_ridge(rightsolve, ridge_penalty)#/fm_shape)
+        
 
         return rightsolve
 

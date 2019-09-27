@@ -28,20 +28,27 @@ class TestCPALS:
             ktensor.factor_matrices[i][...] = np.abs(fm)
 
         return ktensor
+
+    @pytest.fixture
+    def orthogonal_rank4_kruskal_tensor(self):
+        ktensor = decompositions.KruskalTensor.random_init((30, 40, 50), rank=4)
+        ktensor.normalize_components()
+        ktensor.factor_matrices[0] = np.linalg.qr(ktensor.factor_matrices[0])[0]
+
+        return ktensor
     
     def check_decomposition(self, kruskal_tensor, *, test_closeness=True, test_fms=True, **additional_params):
-
         X = kruskal_tensor.construct_tensor()
         cp_als = cp.CP_ALS(4, max_its=1000, convergence_tol=1e-10, **additional_params)
         estimated_ktensor = cp_als.fit_transform(X)
         estimated_ktensor.normalize_components()
 
         if test_closeness:
-            assert np.allclose(X, estimated_ktensor.construct_tensor())
+            assert np.linalg.norm(X - estimated_ktensor.construct_tensor())**2/np.linalg.norm(X) < 1e-5
         if test_fms:
             assert metrics.factor_match_score(
                 kruskal_tensor.factor_matrices, estimated_ktensor.factor_matrices
-            )[0] > 1-1e-7
+            )[0] > 1-1e-5
         
     def test_rank4_decomposition(self, rank4_kruskal_tensor):
         self.check_decomposition(rank4_kruskal_tensor)
@@ -49,8 +56,11 @@ class TestCPALS:
     def test_rank4_nonnegative_decomposition(self, nonnegative_rank4_kruskal_tensor):
         self.check_decomposition(nonnegative_rank4_kruskal_tensor, non_negativity_constraints=[True, True, True])
     
-    def test_rank4_l2_regularisation(self, rank4_kruskal_tensor):
-        pass
+    def test_rank4_orthogonal_decomposition(self, orthogonal_rank4_kruskal_tensor):
+        self.check_decomposition(orthogonal_rank4_kruskal_tensor, orthogonality_constraints=[True, False, False])
+    
+    #def test_rank4_l2_regularisation(self, rank4_kruskal_tensor):
+    #    pass
         # self.check_decomposition(rank4_kruskal_tensor, ridge_penalties=[1e-5, 1e-5, 1e-5])
 
     def check_monotone_convergence(self, kruskal_tensor, **additional_params):
@@ -60,13 +70,17 @@ class TestCPALS:
             cp_als,
             '_update_als_factor',
             'loss',
-            tol=1e-20
+            atol=1e-8,
+            rtol=1e-4,
         )
         cp_als.fit_transform(X)
 
     def test_rank4_monotone_convergence(self, rank4_kruskal_tensor):
         self.check_monotone_convergence(rank4_kruskal_tensor)
     
+    def test_rank4_orthogonal_monotone_convergence(self, orthogonal_rank4_kruskal_tensor):
+        self.check_monotone_convergence(orthogonal_rank4_kruskal_tensor, orthogonality_constraints=[True, False, False])
+            
     def test_rank4_nonnegative_monotone_convergence(self, nonnegative_rank4_kruskal_tensor):
         for constraints in itertools.product([True, False], repeat=3):
             self.check_monotone_convergence(nonnegative_rank4_kruskal_tensor, non_negativity_constraints=constraints)
@@ -81,7 +95,8 @@ class TestCPALS:
         with tempfile.TemporaryDirectory() as tempfolder:
             checkpoint_path = f'{tempfolder}/checkpoint.h5'
             cp_als = cp.CP_ALS(
-                4, max_its=max_its, convergence_tol=1e-20, checkpoint_frequency=checkpoint_frequency,
+                4, max_its=max_its, convergence_tol=-1, rel_loss_tol=-1,
+                checkpoint_frequency=checkpoint_frequency,
                 checkpoint_path=checkpoint_path, print_frequency=-5
             )
             decomposition = cp_als.fit_transform(X)
@@ -95,7 +110,7 @@ class TestCPALS:
 
 
             cp_als2 = cp.CP_ALS(
-                4, max_its=100, convergence_tol=1e-20, init='from_checkpoint'
+                4, max_its=100, convergence_tol=-1, rel_loss_tol=-1, init='from_checkpoint'
             )
             cp_als2._init_fit(X, 100, checkpoint_path)
             for fm1, fm2 in zip(cp_als.decomposition.factor_matrices, cp_als2.decomposition.factor_matrices):
