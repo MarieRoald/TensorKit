@@ -27,6 +27,23 @@ def non_negative_rightsolve(A, B):
     return x
 
 
+def orthogonal_rightsolve(A, B):
+    """Solve the equation XA = B wrt X with orthogonality on X
+    """
+    return orthogonal_solve(A.T, B.T).T
+
+
+def orthogonal_solve(A, B):
+    """Solve the equation AX = B wrt X with orthogonality on X
+    """
+    U, S, Vh = np.linalg.svd(B.T@A, full_matrices=False)
+    S_tol = max(U.shape) * S[0] * (1e-16)
+    should_keep = (S > S_tol).astype(float)
+    should_keep = 1
+
+    return (Vh.T * should_keep)@ U.T
+
+
 def add_rightsolve_ridge(rightsolve, ridge_penalty):
     def ridge_rightsolve(A, B):
         n, m = A.shape

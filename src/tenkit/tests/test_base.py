@@ -60,8 +60,6 @@ class TestRightsolve:
 
 
 class TestNonnegativeRightsolve(TestRightsolve):
-    def rightsolve(self, *args, **kwargs):
-        return base.non_negative_rightsolve(*args, **kwargs)
     
     def test_least_squares_matrix_negative_solution(self, nonnegative_A, nonnegative_A_orthogonal_component):
         X = np.array(
@@ -76,3 +74,22 @@ class TestNonnegativeRightsolve(TestRightsolve):
 
         assert np.all(B >= 0), "If this fails, then the error lies in the test."
         assert np.all(self.rightsolve(nonnegative_A, B) >= 0)
+
+
+class TestOrthogonalRightsolve:
+    def rightsolve(self, *args, **kwargs):
+        return base.orthogonal_rightsolve(*args, **kwargs)
+
+    @pytest.fixture
+    def orthogonal_matrix(self):
+        return np.linalg.qr(np.random.randn(100, 10))[0]
+    
+    @pytest.fixture
+    def nonorthogonal_matrix(self):
+        return np.random.randn(10, 50)
+    
+    def test_orthogonal_rightsolve(self, orthogonal_matrix, nonorthogonal_matrix):
+        X = orthogonal_matrix
+        Y = nonorthogonal_matrix
+        product = X@Y
+        assert np.linalg.norm(X - self.rightsolve(Y, product))/np.linalg.norm(X) < 1e-5
