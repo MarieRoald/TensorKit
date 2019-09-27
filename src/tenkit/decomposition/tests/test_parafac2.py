@@ -54,7 +54,8 @@ class TestParafac2ALS:
             parafac2_als,
             '_update_projection_matrices',
             'SSE',
-            tol=1e-10
+            atol=1e-8,
+            rtol=1e-4
         )
         parafac2_als.fit_transform(X)
  
@@ -65,7 +66,8 @@ class TestParafac2ALS:
             parafac2_als,
             '_update_parafac2_factors',
             'SSE',
-            tol=1e-10
+            atol=1e-8,
+            rtol=1e-4
         )
         parafac2_als.fit_transform(X)
 
