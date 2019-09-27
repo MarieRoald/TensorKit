@@ -261,9 +261,9 @@ class EvolvingTensor(BaseDecomposedTensor):
         B = ktensor.factor_matrices[1]
         C = ktensor.factor_matrices[2]
 
-        B = np.ones((len(A), 1, 1))*B[np.newaxis]
+        B = np.ones((len(C), 1, 1))*B[np.newaxis]
 
-        return cls(C, B, A)
+        return cls(A, B, C)
 
     @classmethod
     def from_factor_matrices(cls, factor_matrices):
