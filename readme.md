@@ -5,6 +5,8 @@ TensorKit offers a scikit-learn like API to tensor learning in Python.
 
 Currently, we support CP and PARAFAC2 decomposition using alternating least squares and we are working on coupled decompositions.
 
+Note that the code is still under development so the API may be subject to change.
+
 TensorKit is created by Marie Roald and Yngve Mardal Moe.
 
 ## Why not just use TensorLy
@@ -13,7 +15,13 @@ TensorLy is a good way into providing tensor learning in Python, however, we fou
 
 ## Installation
 
-Setup file is coming. Currently, you will have to download the repo and add it to your path variable.
+To install the latest version, run the following commands
+
+```bash
+git clone https://github.com/marieroald/tensorkit
+cd TensorKit
+python setup.py
+```
 
 ## Example
 
