@@ -6,6 +6,9 @@ from .. import metrics
 from .. import utils
 
 
+__all__ = ['KruskalTensor', 'EvolvingTensor', 'Parafac2Tensor']
+
+
 class BaseDecomposedTensor(ABC):
     @abstractmethod
     def __init__(self):
