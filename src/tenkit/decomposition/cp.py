@@ -11,28 +11,77 @@ from .. import base
 from ..utils import normalize_factors
 
 
+__all__ = ['CP_ALS']
+
+
 class BaseCP(BaseDecomposer):
+    r"""CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares.
+
+    Arguments:
+    ----------
+    max_its: int (optional, default=1000)
+        Maximum number of iterations for fitting the model. 
+        Can be overwritten by the ``fit`` method.
+    convergence_tol: float (optional, default=1e-6)
+        Minimum relative function change between two consequetive
+        iterations for the model to continue fitting. Computed as
+        
+        .. math::
+
+            \frac{L(X_i) - L(X_{i+1}) }{L(X_{i+1})},
+        
+        where :math:`L` is the loss (Sum squared error) and :math:`X_i`
+        is the decomposition at iteration :math:`i`.
+    logger: list(Logger) (optional, default=None)
+        List of loggers, each logger should implement a ``log`` method
+        that takes a decomposer as input and a ``write_to_hdf5_group``
+        method that stores the log in a hdf5 group. See 
+        ``tenkit.logging.BaseLogger`` for interface.
+    checkpoint_frequency: int (optional, default=None)
+        How often the decomposer should store the decomposition and
+        logs to disk. If None or negative, will only
+        checkpoint the last iteration. 
+    checkpoint_path: str or Path (optional, default=None)
+        Where to store the log HDF5 file. If None, then the checkpoints
+        and logs are not stored to disk.
+    print_frequency: int (optional, default=None)
+        How often convergence information should be printed in the terminal.
+        None and negative values leads to no printing.
+    ridge_penalties: list(float) (optional, default=None)
+        Regularisation parameters. The loss is regularised such that
+
+        .. math::
+
+            L_{reg} = L + \sum_i \lambda_i ||U_i||_F^2
+
+        Where :math:`L_{reg}` is the regularised loss, :math:`L` is the unregularised
+        loss, :math:`\lambda_i` is the ith element in ``ridge_penalites`` and :math:`U_i`
+        is the ith factor matrix (or blueprint factor matrix for the evolving mode). 
+        If None, no modes are regularised.
+    """
     DecompositionType = decompositions.KruskalTensor
     def __init__(
         self,
         rank,
-        max_its,
-        convergence_tol=1e-10,
+        max_its=1000,
+        convergence_tol=1e-6,
         rel_loss_tol=1e-10,
         init='random',
         loggers=None,
         checkpoint_frequency=None,
         checkpoint_path=None,
         ridge_penalties=None,
+        print_frequency=None,
     ):
         super().__init__(
             loggers=loggers,
             checkpoint_frequency=checkpoint_frequency,
-            checkpoint_path=checkpoint_path
+            checkpoint_path=checkpoint_path,
+            print_frequency=print_frequency,
+            max_its=max_its,
+            convergence_tol=convergence_tol,
         )
         self.rank = rank
-        self.max_its = max_its
-        self.convergence_tol = convergence_tol
         self.init = init
         self.ridge_penalties = ridge_penalties
         self.rel_loss_tol = rel_loss_tol
@@ -181,7 +230,6 @@ class BaseCP(BaseDecomposer):
         loss = self.SSE
         if self.ridge_penalties is not None:
             for ridge, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
-                #ridge /= np.prod(factor_matrix.shape)
                 loss += ridge*np.linalg.norm(factor_matrix)**2
         return loss
    
@@ -190,35 +238,84 @@ class BaseCP(BaseDecomposer):
     
     @property
     def reconstructed_X(self):
-        # Todo: Cache this
         return self.decomposition.construct_tensor()
 
     @property
     def factor_matrices(self):
         return self.decomposition.factor_matrices
-    
+
     @property
     def weights(self):
         return self.decomposition.weights
 
-
 class CP_ALS(BaseCP):
-    """CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares."""
+    r"""CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares.
+
+    Arguments:
+    ----------
+    max_its: int (optional, default=1000)
+        Maximum number of iterations for fitting the model. 
+        Can be overwritten by the ``fit`` method.
+    convergence_tol: float (optional, default=1e-6)
+        Minimum relative function change between two consequetive
+        iterations for the model to continue fitting. Computed as
+        
+        .. math::
+
+            \frac{L(X_i) - L(X_{i+1}) }{L(X_{i+1})},
+        
+        where :math:`L` is the loss (Sum squared error) and :math:`X_i`
+        is the decomposition at iteration :math:`i`.
+    logger: list(Logger) (optional, default=None)
+        List of loggers, each logger should implement a ``log`` method
+        that takes a decomposer as input and a ``write_to_hdf5_group``
+        method that stores the log in a hdf5 group. See 
+        ``tenkit.logging.BaseLogger`` for interface.
+    checkpoint_frequency: int (optional, default=None)
+        How often the decomposer should store the decomposition and
+        logs to disk. If None or negative, will only
+        checkpoint the last iteration. 
+    checkpoint_path: str or Path (optional, default=None)
+        Where to store the log HDF5 file. If None, then the checkpoints
+        and logs are not stored to disk.
+    print_frequency: int (optional, default=None)
+        How often convergence information should be printed in the terminal.
+        None and negative values leads to no printing.
+    non_negativity_constraints: list(bool) (optional, default=None)
+        If nth element in the list is True, the nth mode is constrained to be
+        non-negative. If None, no modes are constrained.
+        The evolving mode cannot be constrained. 
+    ridge_penalties: list(float) (optional, default=None)
+        Regularisation parameters. The loss is regularised such that
+
+        .. math::
+
+            L_{reg} = L + \sum_i \lambda_i ||U_i||_F^2
+
+        Where :math:`L_{reg}` is the regularised loss, :math:`L` is the unregularised
+        loss, :math:`\lambda_i` is the ith element in ``ridge_penalites`` and :math:`U_i`
+        is the ith factor matrix (or blueprint factor matrix for the evolving mode). 
+        If None, no modes are regularised.
+    orthonormality_constraints: list(bool) (optional, default=None)
+        If nth element in the list is True, the nth mode is constrained to be
+        orthonormal. If None, no modes are constrained. Note: all modes should not be
+        orhtonormal.
+    """
 
     def __init__(
         self,
         rank,
-        max_its,
-        convergence_tol=1e-10,
+        max_its=1000,
+        convergence_tol=1e-6,
         rel_loss_tol=1e-10,
         init='random',
         loggers=None,
         checkpoint_frequency=None,
         checkpoint_path=None,
-        print_frequency=0,
+        print_frequency=None,
         non_negativity_constraints=None,
         ridge_penalties=None,
-        orthogonality_constraints=None,
+        orthonormality_constraints=None,
     ):
         super().__init__(
             rank=rank,
@@ -229,11 +326,11 @@ class CP_ALS(BaseCP):
             loggers=loggers,
             checkpoint_frequency=checkpoint_frequency,
             checkpoint_path=checkpoint_path,
-            ridge_penalties=ridge_penalties
+            ridge_penalties=ridge_penalties,
+            print_frequency=print_frequency
         )
-        self.print_frequency = print_frequency
         self.non_negativity_constraints = non_negativity_constraints
-        self.orthogonality_constraints = orthogonality_constraints
+        self.orthonormality_constraints = orthonormality_constraints
 
 
     def _init_fit(self, X, max_its, initial_decomposition):
@@ -241,9 +338,9 @@ class CP_ALS(BaseCP):
         self.decomposition.reset_weights()
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False]*len(self.factor_matrices)
-        if self.orthogonality_constraints is None:
-            self.orthogonality_constraints = [False]*len(self.factor_matrices)
-        for mode, (orthogonality) in enumerate(self.orthogonality_constraints):
+        if self.orthonormality_constraints is None:
+            self.orthonormality_constraints = [False]*len(self.factor_matrices)
+        for mode, (orthogonality) in enumerate(self.orthonormality_constraints):
             fm = self.decomposition.factor_matrices[mode]
             if orthogonality:
                 self.decomposition.factor_matrices[mode] = np.linalg.qr(fm)[0]
@@ -271,7 +368,7 @@ class CP_ALS(BaseCP):
         if self.non_negativity_constraints[mode]:
             rightsolve = base.non_negative_rightsolve
         
-        if self.orthogonality_constraints[mode]:
+        if self.orthonormality_constraints[mode]:
             if self.non_negativity_constraints[mode]:
                 raise ValueError('Cannot perform nonnegative orthogonal solve')
 

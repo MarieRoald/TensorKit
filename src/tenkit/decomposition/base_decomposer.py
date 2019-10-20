@@ -13,18 +13,60 @@ __author__ = "Marie Roald & Yngve Mardal Moe"
 
 
 class BaseDecomposer(ABC):
+    R"""Base class for all TensorKit decomposer objects
+
+    Arguments:
+    ----------
+    max_its: int (optional, default=1000)
+        Maximum number of iterations for fitting the model. 
+        Can be overwritten by the ``fit`` method.
+    convergence_tol: float (optional, default=1e-6)
+        Minimum relative function change between two consequetive
+        iterations for the model to continue fitting. Computed as
+        
+        .. math::
+
+            \frac{L(X_i) - L(X_{i+1}) }{L(X_{i+1})},
+        
+        where :math:`L` is the loss (Sum squared error) and :math:`X_i`
+        is the decomposition at iteration :math:`i`.
+    logger: list(Logger) (optional, default=None)
+        List of loggers, each logger should implement a ``log`` method
+        that takes a decomposer as input and a ``write_to_hdf5_group``
+        method that stores the log in a hdf5 group. See 
+        ``tenkit.logging.BaseLogger`` for interface.
+    checkpoint_frequency: int (optional, default=None)
+        How often the decomposer should store the decomposition and
+        logs to disk. If None or negative, will only
+        checkpoint the last iteration. 
+    checkpoint_path: str or Path (optional, default=None)
+        Where to store the log HDF5 file. If None, then the checkpoints
+        and logs are not stored to disk.
+    print_frequency: int (optional, default=None)
+        How often convergence information should be printed in the terminal.
+        None and negative values leads to no printing.
+    """
     DecompositionType = decompositions.BaseDecomposedTensor
     @abstractmethod
     def __init__(
         self,
+        max_its=1000,
+        convergence_tol=1e-6, 
         loggers=None,
         checkpoint_frequency=None,
-        checkpoint_path=None
+        checkpoint_path=None,
+        print_frequency=None,
     ):
+        self.max_its = max_its
+        self.convergence_tol = convergence_tol
         if checkpoint_frequency is None:
             checkpoint_frequency = -1
         self.checkpoint_frequency = checkpoint_frequency
         self.checkpoint_path = checkpoint_path
+
+        if print_frequency is None:
+            print_frequency = -1
+        self.print_frequency = print_frequency 
 
         if loggers is None:
             loggers = []

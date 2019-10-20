@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from pathlib import Path
+import warnings
 import numpy as np
 from .base_decomposer import BaseDecomposer
 from . import decompositions
@@ -8,26 +9,79 @@ from ..utils import normalize_factors, get_pca_loadings
 from .. import base
 
 
+__all__ = ['Parafac2_ALS']
+
+
 class BaseParafac2(BaseDecomposer):
-    """
-    TODO: Ikke tillat at evolve_mode og evolve_over settes manuelt
-    TODO: Evolve_mode=2, evolve_over=0
+    r"""Base class for Parafac2 decomposer objects
+
+    Arguments:
+    ----------
+    rank: int
+        Number of components 
+    max_its: int (optional, default=1000)
+        Maximum number of iterations for fitting the model. 
+        Can be overwritten by the ``fit`` method.
+    convergence_tol: float (optional, default=1e-6)
+        Minimum relative function change between two consequetive
+        iterations for the model to continue fitting. Computed as
+        
+        .. math::
+
+            \frac{L(X_i) - L(X_{i+1})}{L(X_{i+1})},
+        
+        where :math:`L` is the loss (Sum squared error) and :math:`X_i`
+        is the decomposition at iteration :math:`i`.
+    init: str (optional, default = 'random')
+        Initialisation scheme for the decomposer (case insensitive). Options:
+    
+          * Random: Initiate the decomposition as a random Parafac2 tensor
+          * SVD: Use the SVD to find the factor matrices
+          * CP: Run 20 CP iterations and use that decomposition as initial
+          Parafac2 tensor (QR on the evolving mode to split into projection
+          and blueprint matrices)
+          * from_checkpoint: Load the last iteration in the specified
+          checkpoint file (alternatively, just the path to the decomposition file)
+          * Precomputed: Use already existing Parafac2 tensor to initialise
+          the decomposition. 
+
+    logger: list(Logger) (optional, default=None)
+        List of loggers, each logger should implement a ``log`` method
+        that takes a decomposer as input and a ``write_to_hdf5_group``
+        method that stores the log in a hdf5 group. See 
+        ``tenkit.logging.BaseLogger`` for interface.
+    checkpoint_frequency: int (optional, default=None)
+        How often the decomposer should store the decomposition and
+        logs to disk. If None or negative, will only
+        checkpoint the last iteration. 
+    checkpoint_path: str or Path (optional, default=None)
+        Where to store the log HDF5 file. If None, then the checkpoints
+        and logs are not stored to disk.
+    print_frequency: int (optional, default=None)
+        How often convergence information should be printed in the terminal.
+        None and negative values leads to no printing.
     """
     DecompositionType = decompositions.Parafac2Tensor
     def __init__(self, 
         rank, 
-        max_its, 
-        convergence_tol=1e-10, 
+        max_its=1000, 
+        convergence_tol=1e-6, 
         init='random',
         loggers=None,
         checkpoint_frequency=None,
         checkpoint_path=None,
+        print_frequency=10,
     ):
-        super().__init__(loggers=loggers, checkpoint_frequency=checkpoint_frequency, checkpoint_path=checkpoint_path)
+        super().__init__(
+            max_its=max_its,
+            convergence_tol=convergence_tol,
+            loggers=loggers,
+            checkpoint_frequency=checkpoint_frequency,
+            checkpoint_path=checkpoint_path,
+            print_frequency=print_frequency,
+        )
 
         self.rank = rank
-        self.max_its = max_its
-        self.convergence_tol = convergence_tol
         self.init = init
 
     def set_target(self, X):
@@ -187,35 +241,112 @@ class BaseParafac2(BaseDecomposer):
 
 
 class Parafac2_ALS(BaseParafac2):
+    r"""Decomposer for Parafac2 with ALS optimization
+
+    Arguments:
+    ----------
+    rank: int
+        Number of components 
+    max_its: int (optional, default=1000)
+        Maximum number of iterations for fitting the model. 
+        Can be overwritten by the ``fit`` method.
+    convergence_tol: float (optional, default=1e-6)
+        Minimum relative function change between two consequetive
+        iterations for the model to continue fitting. Computed as
+        
+        .. math::
+
+            \frac{L(X_i) - L(X_{i+1}) }{L(X_{i+1})},
+        
+        where :math:`L` is the loss (Sum squared error) and :math:`X_i`
+        is the decomposition at iteration :math:`i`.
+    init: str (optional, default = 'random')
+        Initialisation scheme for the decomposer (case insensitive). Options:
+    
+          * Random: Initiate the decomposition as a random Parafac2 tensor
+          * SVD: Use the SVD to find the factor matrices
+          * CP: Run 20 CP iterations and use that decomposition as initial
+          Parafac2 tensor (QR on the evolving mode to split into projection
+          and blueprint matrices)
+          * from_checkpoint: Load the last iteration in the specified
+          checkpoint file (alternatively, just the path to the decomposition file)
+          * Precomputed: Use already existing Parafac2 tensor to initialise
+          the decomposition. 
+    logger: list(Logger) (optional, default=None)
+        List of loggers, each logger should implement a ``log`` method
+        that takes a decomposer as input and a ``write_to_hdf5_group``
+        method that stores the log in a hdf5 group. See 
+        ``tenkit.logging.BaseLogger`` for interface.
+    checkpoint_frequency: int (optional, default=None)
+        How often the decomposer should store the decomposition and
+        logs to disk. If None or negative, will only
+        checkpoint the last iteration. 
+    checkpoint_path: str or Path (optional, default=None)
+        Where to store the log HDF5 file. If None, then the checkpoints
+        and logs are not stored to disk.
+    print_frequency: int (optional, default=None)
+        How often convergence information should be printed in the terminal.
+        None and negative values leads to no printing.
+    cp_updates_per_it: int (optional, default=5)
+        Number of CP iterations to run between each projection matrix update.
+    non_negativity_constraints: list(bool) (optional, default=None)
+        If nth element in the list is True, the nth mode is constrained to be
+        non-negative. If None, no modes are constrained.
+        Note: The evolving mode cannot be constrained. 
+    ridge_penalties: list(float) (optional, default=None)
+        Regularisation parameters. The loss is regularised such that
+
+        .. math::
+
+            L_{reg} = L + \sum_i \lambda_i ||U_i||_F^2
+
+        Where :math:`L_{reg}` is the regularised loss, :math:`L` is the unregularised
+        loss, :math:`\lambda_i` is the ith element in ``ridge_penalites`` and :math:`U_i`
+        is the ith factor matrix (or blueprint factor matrix for the evolving mode). 
+        If None, no modes are regularised.
+    orthonormality_constraints: list(bool) (optional, default=None)
+        If nth element in the list is True, the nth mode is constrained to be
+        orthonormal. If None, no modes are constrained. Note: all modes should not be
+        orhtonormal and the evolving mode cannot be constrained. 
+    """
     def __init__(
         self,
         rank,
-        max_its,
-        convergence_tol=1e-10,
+        max_its=1000, 
+        convergence_tol=1e-6, 
         init='random',
         loggers=None,
         checkpoint_frequency=None,
         checkpoint_path=None,
-        non_negativity_constraints=None,
         print_frequency=10,
         cp_updates_per_it=5,
+        non_negativity_constraints=None,
         ridge_penalties=None,
-        orthogonality_constraints=None
+        orthonormality_constraints=None,
     ):
         super().__init__(
             rank,
-            max_its,
+            max_its=max_its,
             convergence_tol=convergence_tol,
             init=init,
             loggers=loggers,
             checkpoint_frequency=checkpoint_frequency,
-            checkpoint_path=checkpoint_path
+            checkpoint_path=checkpoint_path,
+            print_frequency=print_frequency,
         )
         self.non_negativity_constraints = non_negativity_constraints
-        self.print_frequency = print_frequency
+        if self.non_negativity_constraints is None:
+            self.non_negativity_constraints = [False, False, False]
+        if self.non_negativity_constraints[1]:
+            warnings.warn(
+                "Non negativity constraints on the evolving (second) mode will only"
+                " be imposed on the blueprint matrix, not the evolving components.",
+                RuntimeWarning
+            )
+
         self.cp_updates_per_it = cp_updates_per_it
         self.ridge_penalties = ridge_penalties
-        self.orthogonality_constraints = orthogonality_constraints
+        self.orthonormality_constraints = orthonormality_constraints
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
@@ -224,17 +355,19 @@ class Parafac2_ALS(BaseParafac2):
 
     def _prepare_cp_decomposer(self):
         self.cp_decomposition = decompositions.KruskalTensor([self.decomposition.A, self.decomposition.blueprint_B, self.decomposition.C])
-        self.cp_decomposer = cp.CP_ALS(self.rank, max_its=1000, 
-                                       convergence_tol=0, print_frequency=-1, 
-                                       non_negativity_constraints=self.non_negativity_constraints,
-                                       ridge_penalties=self.ridge_penalties,
-                                       orthogonality_constraints=self.orthogonality_constraints,
-                                       init='precomputed')
+        self.cp_decomposer = cp.CP_ALS(
+            self.rank,
+            max_its=np.inf, 
+            convergence_tol=0,
+            print_frequency=-1, 
+            non_negativity_constraints=self.non_negativity_constraints,
+            ridge_penalties=self.ridge_penalties,
+            orthonormality_constraints=self.orthonormality_constraints,
+            init='precomputed'
+        )
         self.cp_decomposer._init_fit(X=self.projected_X, max_its=np.inf, initial_decomposition=self.cp_decomposition)
 
     def _fit(self):
-        if self.non_negativity_constraints is None:
-            self.non_negativity_constraints = [False, False, False]
 
         self._prepare_cp_decomposer()
         for it in range(self.max_its - self.current_iteration):
