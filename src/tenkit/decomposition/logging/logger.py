@@ -27,7 +27,7 @@ class BaseLogger(ABC):
         return self.log_iterations[self.prev_checkpoint_it:]
 
 
-    def _write_log_to_hd5_group(self, logname, logger_group, log):
+    def _write_sequence_to_hd5_group(self, logname, logger_group, log):
         """Writes list of log values to HDF5 group.
         
         Arguments
@@ -53,8 +53,8 @@ class BaseLogger(ABC):
     def write_to_hdf5_group(self, h5group):
         """Writes log metrics and log iterations to HDF5 group."""
         logger_group = h5group.require_group(type(self).__name__)
-        self._write_log_to_hd5_group('iterations', logger_group, self.latest_log_iterations)
-        self._write_log_to_hd5_group('values', logger_group, self.latest_log_metrics)
+        self._write_sequence_to_hd5_group('iterations', logger_group, self.latest_log_iterations)
+        self._write_sequence_to_hd5_group('values', logger_group, self.latest_log_metrics)
         self.prev_checkpoint_it += len(self.latest_log_iterations)
 
 
