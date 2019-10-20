@@ -217,7 +217,8 @@ def fix_signs_evolving_tensor(evolving_tensor, data_tensor):
     fixed_evolving_tensor._C = fixed_evolve_over_factor
     return fixed_evolving_tensor
 
-
-
-
-
+def iter_checkpoints(h5_checkpoint_file):
+    for groupname in sorted(h5_checkpoint_file):
+        if groupname.startswith('checkpoint'):
+            yield h5_checkpoint_file[groupname]
+    
