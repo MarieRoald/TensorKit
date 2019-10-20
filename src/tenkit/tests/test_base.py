@@ -60,6 +60,8 @@ class TestRightsolve:
 
 
 class TestNonnegativeRightsolve(TestRightsolve):
+    def rightsolve(self, *args, **kwargs):
+        return base.non_negative_rightsolve(*args, **kwargs)
     
     def test_least_squares_matrix_negative_solution(self, nonnegative_A, nonnegative_A_orthogonal_component):
         X = np.array(
