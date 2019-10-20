@@ -1,4 +1,4 @@
-from .cp import CP_ALS
-from .parafac2 import Parafac2_ALS
+from .cp import *
+from .parafac2 import *
 from . import logging
-from . import decompositions
+from .decompositions import *
