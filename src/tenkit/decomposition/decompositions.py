@@ -219,6 +219,11 @@ class KruskalTensor(BaseDecomposedTensor):
             degeneracy_scores *= metrics._tucker_congruence(factor_matrix, factor_matrix)
 
         return degeneracy_scores
+    
+    def core_consistency(self, X, normalized=False):
+        if len(self.factor_matrices) != 3:
+            raise ValueError('Core consistency is only implemented for third order tensors')
+        return metrics.core_consistency(X, *self.factor_matrices, normalized=normalized)
         
 
 class EvolvingTensor(BaseDecomposedTensor):
