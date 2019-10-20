@@ -57,7 +57,7 @@ class TestCPALS:
         self.check_decomposition(nonnegative_rank4_kruskal_tensor, non_negativity_constraints=[True, True, True])
     
     def test_rank4_orthogonal_decomposition(self, orthogonal_rank4_kruskal_tensor):
-        self.check_decomposition(orthogonal_rank4_kruskal_tensor, orthogonality_constraints=[True, False, False])
+        self.check_decomposition(orthogonal_rank4_kruskal_tensor, orthonormality_constraints=[True, False, False])
     
     #def test_rank4_l2_regularisation(self, rank4_kruskal_tensor):
     #    pass
@@ -79,7 +79,7 @@ class TestCPALS:
         self.check_monotone_convergence(rank4_kruskal_tensor)
     
     def test_rank4_orthogonal_monotone_convergence(self, orthogonal_rank4_kruskal_tensor):
-        self.check_monotone_convergence(orthogonal_rank4_kruskal_tensor, orthogonality_constraints=[True, False, False])
+        self.check_monotone_convergence(orthogonal_rank4_kruskal_tensor, orthonormality_constraints=[True, False, False])
             
     def test_rank4_nonnegative_monotone_convergence(self, nonnegative_rank4_kruskal_tensor):
         for constraints in itertools.product([True, False], repeat=3):
