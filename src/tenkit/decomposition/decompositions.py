@@ -12,15 +12,15 @@ __all__ = ['KruskalTensor', 'EvolvingTensor', 'Parafac2Tensor']
 class BaseDecomposedTensor(ABC):
     @abstractmethod
     def __init__(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def construct_tensor(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def __getitem__(self, item):
-        pass
+        raise NotImplementedError
 
     def store(self, filename):
         with h5py.File(filename, 'w') as h5:
@@ -28,7 +28,7 @@ class BaseDecomposedTensor(ABC):
     
     @abstractmethod
     def store_in_hdf5_group(self, group):
-        pass
+        raise NotImplementedError
     
     def _prepare_hdf5_group(self, group):
         group.attrs['type'] = type(self).__name__
@@ -40,14 +40,10 @@ class BaseDecomposedTensor(ABC):
     
     @abstractclassmethod
     def load_from_hdf5_group(cls, group):
-        pass
+        raise NotImplementedError
     
     @classmethod
     def _check_hdf5_group(cls, group):
-        tensortype = None
-        if 'type' in group.attrs:
-            tensortype = group.attrs['type']
-
         if not group.attrs['type'] == cls.__name__:
             raise Warning(f'The `type` attribute of the HDF5 group is not'
                           f' "{cls.__name__}, but "{group.attrs["type"]}"\n.'
@@ -55,6 +51,58 @@ class BaseDecomposedTensor(ABC):
 
 
 class KruskalTensor(BaseDecomposedTensor):
+    r"""Container class for KruskaTensors.
+
+    KruskalTensors are decompositions of a tensor :math:`\mathcal{X}` as
+    a sum of rank one components.
+    For third order tensors we can describe the decomposition as:
+
+    .. math::
+
+        \mathcal{X} = \sum_{r=1}^R \mathbf{a}_r \circ \mathbf{b}_r \circ \mathbf{c}_r,
+    
+    where :math:`R` is the rank of the decomposition and 
+    :math:`\mathbf{a}_r, \mathbf{b}_r` and :math:`\mathbf{c}_r` are the
+    :math:`r` column vector in the factor matrices :math:`A, B` and :math:`C`,
+    respectively. Alternatively, this can be written as
+    
+    .. math::
+
+        X_k = A \text{diag}(\mathbf{c}_{k :}) B^T,
+    
+    where :math:`X_k` is the kth frontal slice of the tensor, (the matrix
+    equivalent to ``X[:, :, k]``), :math:`A` and :math:`B` are factor matrices and 
+    :math:`\text{diag}(\mathbf{c}_{k :})` is a diagonal matrix formed from the
+    kth row of the factor matrix :math:`C`. Yet another way to write this is as
+
+    .. math::
+
+        \mathcal{X}_{i j k} = \sum_{r=1}^R  A_{i r} B_{j r} C_{k r}.
+
+    This decomposition is unique up to scaling of the different factor matrices.
+    For example, a decrease in the magnitude of a column in :math:`A` can be 
+    countered by an increase in :math:`B` or :math:`C`. Therefore, it is common
+    to constrain the decomposition so that the column of the factor matrices have
+    unit length and the introduction of weights. This changes the definition so that
+
+    .. math::
+
+        \mathcal{X} = \sum_{r=1}^R w_r \mathbf{a}_r \circ \mathbf{b}_r \circ \mathbf{c}_r,
+
+    where :math:`w_r` is the rth weight.
+    
+    Arguments:
+    ----------
+    factor_matrices: list(np.ndarray)
+        A list of :math:`n` factor matrices, where :math:`n`
+        is the number of modes in the decomposed tensor.
+        Each factor matrix, :math:`U_i` has size :math:`(l_i \times R)`,
+        where :math:`l_i` is the length of the tensor along the `i-th`
+        mode and :math:`R` is the rank of the decomposition.
+    weights: np.ndarray (optional, default=None)
+        A list of :math:`R` weights, where :math:`R` is the
+        number of components. If None, the weights are all 1.
+    """    
     fm_template = 'factor_matrix{:03d}'
 
     def __init__(self, factor_matrices, weights=None):
@@ -203,7 +251,6 @@ class KruskalTensor(BaseDecomposedTensor):
     def get_single_component_decomposition(self, component):
         factor_matrices = self.factor_matrices
         weights = self.weights
-        DecompositionType = type(self)
 
         single_component_factor_matrices = [
             factor_matrix[:, component, np.newaxis] for factor_matrix in factor_matrices
@@ -230,35 +277,57 @@ class KruskalTensor(BaseDecomposedTensor):
         
 
 class EvolvingTensor(BaseDecomposedTensor):
-    B_template = "B_{:03d}"
-    def __init__(self, A, B, C, all_same_size=True, warning=True):
-        """A tensor whose second mode evolves over the third mode.
+    r"""Container class for evolving tensors whose second mode evolve over the third.
 
-        Arguments:
-        ----------
-        factor_matrices : list
-            List of factor matrices, the `evolve_mode`-th factor should
-            either be a third order tensor or a list of matrices.
-        all_same_size : Bool (default=True)
-            Whether or not the constructed data is a tensor or a list of
-            matrices with different sizes.
-        warning : Bool (default=True)
-            Whether or nor a warning should be raised when construct
-            tensor is called if all the matrices are not the same size.
-        """
+    EvolvingTensors are decompositions of a third-order tensor
+    :math:`\mathcal{X}` on the following form:
+
+    .. math::
+
+        X_k = A \text{diag}(\mathbf{c}_{k :}) B_k^T,
+    
+    where :math:`X_k` is the kth frontal slice of the tensor, (the matrix
+    equivalent to ``X[:, :, k]``), :math:`A` is a factor matrix and :math:`B_k`
+    are the factor matrices of the evolving mode. 
+    :math:`\text{diag}(\mathbf{c}_{k :})` is a diagonal matrix formed from the
+    kth row of the factor matrix :math:`C`.
+
+    In later versions, this class will be implemented so B evolves over A,
+    instead of evolving over C.
+
+    Arguments
+    ---------
+    A : np.ndarray(ndim=2)
+        The factor matrix along the first mode
+    B : np.ndarray(ndim=3) or list(np.ndarray(ndim=2))
+        A list of factor matrices, one for each row in C. If
+        B is a numpy array, then its shape should be (K, J, R),
+        where K is the number of rows in the factor matrix C,
+        J is the length of the tensor along the second mode
+        and R is the rank of the tensor.
+    C : np.ndarray(ndim=2)
+        The factor matrix along the final mode.
+    warning : Bool (default=True)
+        Whether or not a warning should be raised when 
+        ``construct_tensor`` is called if all the matrices are not 
+        the same size.
+    """
+    B_template = "B_{:03d}"
+    def __init__(self, A, B, C, warning=True):
         self.rank = A.shape[1]
-        #self.factor_matrices = factor_matrices
         self._A = A
         self._B = B
         self._C = C
 
         self.warning = warning
-        self.all_same_size = self.check_all_same_size(B)
+        self.all_same_size = self._check_all_same_size(B)
         self.slice_shapes = [(self.A.shape[0], B_k.shape[0]) for B_k in self.B]
         self.num_elements = sum((shape[1] for shape in self.slice_shapes))
 
     @classmethod
     def from_kruskaltensor(cls, ktensor, allow_same_class=False):
+        """Generate an evolving tensor from a Kruskal tensor.
+        """
         if allow_same_class:
             if isinstance(ktensor, cls):
                 return ktensor
@@ -275,9 +344,11 @@ class EvolvingTensor(BaseDecomposedTensor):
 
     @classmethod
     def from_factor_matrices(cls, factor_matrices):
+        """Generate an evolving tensor from a list of factor matrices.
+        """
         return cls(factor_matrices[0], factor_matrices[1], factor_matrices[2])
 
-    def check_all_same_size(self, matrices):
+    def _check_all_same_size(self, matrices):
         size = matrices[0].shape[0]
         for matrix in matrices:
             if size != matrix.shape[0]:
@@ -312,7 +383,7 @@ class EvolvingTensor(BaseDecomposedTensor):
         return [self.A.shape[0], matrix_width, self.C.shape[0]]
     
     def construct_slices(self):
-        """Construct the data slices.
+        """Construct the list of frontal slices of the evolving tensor.
         """
         slices = [None]*len(self.B)
         for k, matrix_size in enumerate(self.slice_shapes):
@@ -382,6 +453,11 @@ class EvolvingTensor(BaseDecomposedTensor):
             raise IndexError
 
     def degeneracy(self):
+        """Return the degeneracy score of the tensor.
+
+        The degeneracy score is given by the factor match score
+        coefficient between two components.
+        """
         degeneracy_scores = np.ones(shape=(self.rank, self.rank))
         for factor_matrix in [self.A, self.B_unfolded, self.C]:
             degeneracy_scores *= metrics._tucker_congruence(factor_matrix, factor_matrix)
@@ -403,8 +479,26 @@ class EvolvingTensor(BaseDecomposedTensor):
 
         
 class ProjectedFactor:
-    def __init__(self, factor, projection_matrices):
-        self.factor = factor
+    r"""Utility class to generate a sequence of projected factor matrices.
+
+    That is,
+
+    .. math::
+
+        B_k = P_k B
+    
+    for a set of orthogonal matrices :math:`{P_k}_k=1^K` and a blueprint
+    factor matric :math:`B \in \mathbb{R}^{r \times r}`.
+    
+    Arguments:
+    ----------
+    blueprint_factor_matrix: np.ndarray
+        Blueprint factor matrix used to generate the evolving factor matrices.
+    projection_matrices: list(np.ndarray)
+        Projection matrices used to generate the evolving factor matrices
+    """
+    def __init__(self, blueprint_factor_matrix, projection_matrices):
+        self.blueprint_factor_matrix = blueprint_factor_matrix
         self.projection_matrices = projection_matrices
     
     def __getitem__(self, k):
@@ -412,7 +506,7 @@ class ProjectedFactor:
         if isinstance(k, tuple):
             slice_ = tuple(ki for ki in k[1:])
             k = k[0]
-        return (self.projection_matrices[k]@self.factor)[slice_]
+        return (self.projection_matrices[k]@self.blueprint_factor_matrix)[slice_]
     
     def __len__(self):
         return len(self.projection_matrices)
@@ -422,6 +516,57 @@ class ProjectedFactor:
 
 
 class Parafac2Tensor(EvolvingTensor):
+    r"""Container class for PARAFAC2 tensors whose second mode evolve over the third.
+
+    PARAFAC2 tensors are decompositions of a third-order tensor
+    :math:`\mathcal{X}` on the following form:
+
+    .. math::
+
+        X_k = A \text{diag}(\mathbf{c}_{k :}) B_k^T,
+    
+    where :math:`X_k` is the kth frontal slice of the tensor, (the matrix
+    equivalent to ``X[:, :, k]``), :math:`A` is a factor matrix and :math:`B_k`
+    are the factor matrices of the evolving mode. 
+    :math:`\text{diag}(\mathbf{c}_{k :})` is a diagonal matrix formed from the
+    kth row of the factor matrix :math:`C`. Moreover the :math:`B_k` factors
+    satisfy the PARAFAC2 constraint,
+
+    .. math::
+
+        B_{k_i}^TB_{k_i} = B_{k_2}^TB_{k_2}
+    
+    for all :math:`k_1,k_2`. To represent a tensor this way, we use the
+    component structure outlined in Kiers, HAL et al. 
+    J. Chemometrics 13, p.275-299 (1999). Namely, that
+
+    .. math::
+
+        B_k = P_k B
+    
+    for some blueprint matrix :math:`B` and an orthogonal projection matrix 
+    :math:`P \in \mathbb{R}^{J_k \times R}`, where :math:`J_k` is 
+    the width of the kth frontal slice and :math:`R` is the rank of
+    the decomposition. 
+
+    In later versions, this class will be implemented so :math:`B` evolves over :math:`A`,
+    instead of evolving over C.
+
+    Arguments
+    ---------
+    A : np.ndarray(ndim=2)
+        The factor matrix along the first mode
+    blueprint_B : np.ndarray(ndim=2)
+        The blueprint matrix used to construct the :math:`B_k` matrices.
+    C : np.ndarray(ndim=2)
+        The factor matrix along the final mode.
+    projection_matrices : list(np.ndarray(ndim=2))
+        A list with the projection matrices used to construct the :math:`B_k` matrices.
+    warning : Bool (default=True)
+        Whether or not a warning should be raised when 
+        ``construct_tensor`` is called if all the matrices are not 
+        the same size.
+    """
     pm_template = 'projection_matrix_{:03d}'
     def __init__(self, A, blueprint_B, C, projection_matrices, warning=True):
         r"""A tensor whose second mode evolves over the third mode according to the PARAFAC2 constraints.
@@ -453,7 +598,7 @@ class Parafac2Tensor(EvolvingTensor):
         self._B = ProjectedFactor(blueprint_B, self._projection_matrices)
 
 
-        self.all_same_size = self.check_all_same_size(projection_matrices)
+        self.all_same_size = self._check_all_same_size(projection_matrices)
         self.slice_shapes = [(self.A.shape[0], B_k.shape[0]) for B_k in self.B] 
         self.num_elements = sum(shape[1] for shape in self.slice_shapes)
 

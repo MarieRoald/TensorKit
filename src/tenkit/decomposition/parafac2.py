@@ -178,9 +178,28 @@ class BaseParafac2(BaseDecomposer):
 
     def fit(self, X, y=None, max_its=None, initial_decomposition=None):
         """Fit a parafac2 model. Precomputed components must be specified if init method is 'precomputed'
+
+        Arguments:
+        ----------
+        X : np.ndarray
+            The tensor or list of tensor slices to fit a PARAFAC2 model to. 
+            The list indices (or first mode) correspond to the C-mode in
+            the following equation
+
+            .. math::
+
+                X_k = A diag(c_k) B_k^T
+            
+            This will be changed in a later version so that the first mode
+            is the evolving mode.
+        y : None
+            Ignored, included to follow sklearn standards.
+        max_its : int (optional)
+            If set, then this will override the class's max_its.
+        initial_decomposition : tenkit.decomposition.decompositions.Parafac2Tensor or str
+            The initial KruskalTensor (init=precomputed) to use or the path of the 
+            logfile to load (init=from_file).
         """
-        # TODO: initial_decomposition en parafc2tensor?
-        # TODO: docstring
 
         self._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self._fit()
@@ -221,7 +240,7 @@ class BaseParafac2(BaseDecomposer):
             projected_X[..., k] = self.X[k]@projection_matrix
         return projected_X
 
-    # Todo: Change name of this function
+    # TODO: Change name of this function
     def _update_projection_matrices(self):
         K = self.X_shape[2]
 
