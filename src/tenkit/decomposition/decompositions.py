@@ -440,7 +440,7 @@ class EvolvingTensor(BaseDecomposedTensor):
         warning = group.attrs['warning']
         all_same_size = group.attrs['all_same_size']
 
-        return cls(A, B, C, all_same_size=all_same_size, warning=warning)
+        return cls(A, B, C, warning=warning)
     
     def __getitem__(self, item):
         if item == 0:
@@ -476,6 +476,24 @@ class EvolvingTensor(BaseDecomposedTensor):
         return metrics.separate_mode_factor_match_score([self.A, self.B_unfolded, self.C],
                                                       [decomposition.A, decomposition.B_unfolded, decomposition.C], 
                                                        fms_reduction=fms_reduction)
+
+    @classmethod
+    def random_init(cls, sizes, rank, non_negativity=None):
+        # TODO: Check if we should use rand or randn
+        if isinstance(sizes[1], int):
+            sizes = list(sizes)
+            sizes[1] = [sizes[1]]*sizes[2]
+        else:
+            all_same_size = False
+
+        if non_negativity == None:
+            non_negativity = [False, False, False]
+            
+        A = np.random.rand(sizes[0], rank)
+        B = [np.random.rand(size, rank) for size in sizes[1]]
+        C = np.random.rand(sizes[2], rank) + 0.1
+
+        return cls(A, B, C)
 
         
 class ProjectedFactor:
@@ -653,7 +671,26 @@ class Parafac2Tensor(EvolvingTensor):
             projection_matrices.append(q[:, :rank])
 
         
-        return cls(A, blueprint_B, C, projection_matrices, all_same_size)
+        return cls(A, blueprint_B, C, projection_matrices)
+
+    def random_init_nn(cls, sizes, rank):
+        if isinstance(sizes[1], int):
+            all_same_size = True
+            sizes = list(sizes)
+            sizes[1] = [sizes[1]]*sizes[2]
+        else:
+            all_same_size = False
+        
+        A = np.random.random_uniform((sizes[0], rank))
+        blueprint_B = np.identity(rank)
+        C = np.random.random_uniform((sizes[0], rank))
+        projection_matrices = []
+
+        for second_mode_size in sizes[1]:
+            q, r = np.linalg.qr(np.random.randn(second_mode_size, rank))
+            projection_matrices.append(q[:, :rank])
+
+
 
     def store_in_hdf5_group(self, group):
         self._prepare_hdf5_group(group)
