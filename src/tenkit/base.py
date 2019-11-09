@@ -59,6 +59,20 @@ def add_rightsolve_ridge(rightsolve, ridge_penalty):
         return rightsolve(A_, B_)
     return ridge_rightsolve
 
+def add_rightsolve_coupling(rightsolve, coupled_factor_matrix, coupling_penalty):
+    def coupling_rightsolve(A, B):
+        p, q = A.shape
+        A_ = np.concatenate(
+            [A, np.sqrt(coupling_penalty)*np.identity(p)],
+            axis=1
+        )
+        B_ = np.concatenate(
+            [B, np.sqrt(coupling_penalty)*coupled_factor_matrix],
+            axis=1
+        )
+        return rightsolve(A_, B_)
+    return coupling_rightsolve
+
 
 def kron_binary_vectors(u, v):
     """Efficient Kronecker product between two vectors.
