@@ -221,4 +221,11 @@ def iter_checkpoints(h5_checkpoint_file):
     for groupname in sorted(h5_checkpoint_file):
         if groupname.startswith('checkpoint'):
             yield h5_checkpoint_file[groupname]
+
+
+def slice_SSE(X_slices1, X_slices2):
+    SSE = 0
+    for slice1, slice2, in zip(X_slices1, X_slices2):
+        SSE += np.sum((slice1-slice2)**2)
+    return SSE
     
