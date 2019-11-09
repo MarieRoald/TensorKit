@@ -7,6 +7,7 @@ from . import decompositions
 from . import cp
 from ..utils import normalize_factors, get_pca_loadings
 from .. import base
+from .. import utils
 
 
 __all__ = ['Parafac2_ALS']
@@ -87,7 +88,7 @@ class BaseParafac2(BaseDecomposer):
     def set_target(self, X):
         if not isinstance(X, list):
             self.target_tensor = X
-            X = X.transpose(2, 0, 1)
+            X = np.ascontiguousarray(X.transpose(2, 0, 1))
         
         self.X = X
         self.X_shape = [len(X[0]), [Xk.shape[1] for Xk in X], len(X)]    # len(A), len(Bk), len(C)
@@ -146,7 +147,7 @@ class BaseParafac2(BaseDecomposer):
             self.load_checkpoint(self.init)
         else:
             # TODO: better message
-            raise ValueError('Init method must be either `random`, `svd`, `from_checkpoint` or `precomputed`.')
+            raise ValueError('Init method must be either `random`, `cp`, `svd`, `from_checkpoint`, `precomputed` or a path to a checkpoint.')
 
     def _check_valid_components(self, decomposition):
         for i, factor_matrix, factor_name in zip([0, 2], [decomposition.A, decomposition.C], ['A', 'C']):
@@ -217,11 +218,7 @@ class BaseParafac2(BaseDecomposer):
 
     @property
     def SSE(self):
-        SSE = 0
-        for X_k, reconstructed_X_k, in zip(self.X, self.reconstructed_X):
-            SSE += np.sum((X_k - reconstructed_X_k)**2)
-        return SSE
-
+        return utils.slice_SSE(self.X, self.reconstructed_X)
     @property
     def MSE(self):
         return self.SSE/self.decomposition.num_elements
