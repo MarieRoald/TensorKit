@@ -219,6 +219,7 @@ class BaseParafac2(BaseDecomposer):
     @property
     def SSE(self):
         return utils.slice_SSE(self.X, self.reconstructed_X)
+
     @property
     def MSE(self):
         return self.SSE/self.decomposition.num_elements
