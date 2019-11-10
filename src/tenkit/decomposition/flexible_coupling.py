@@ -1,3 +1,4 @@
+from copy import copy
 from pathlib import Path
 
 import h5py
@@ -47,6 +48,9 @@ class BaseCoupledMatrices(BaseDecomposer):
     def SSE(self):
         return Parafac2_ALS.SSE.fget(self)
 
+    @property
+    def MSE(self):
+        return Parafac2_ALS.MSE.fget(self)
 
     @property
     def loss(self):
@@ -94,23 +98,6 @@ class BaseCoupledMatrices(BaseDecomposer):
         cp_als.fit(X.transpose(1, 2, 0))
         self.decomposition = self.DecompositionType.from_kruskaltensor(cp_als.decomposition)
 
-    def init_parafac2(self):
-        X = list(self.X)
-        non_negativity_constraints = copy(self.non_negativity_constraints)
-        non_negativity_constraints[1] = False
-        parafac2_als = Parafac2_ALS(
-            self.rank, 20, non_negativity_constraints=non_negativity_constraints, init='cp'
-        )
-        parafac2_als.fit(X)
-        A = parafac2_als.decomposition.A
-        B = [B_k for B_k in parafac2_als.decomposition.B]
-        if self.non_negativity_constraints[1]:
-            for B_k in B:
-                B_k[B_k < 0] = 0
-        C = parafac2_als.decomposition.C
-
-        self.decomposition = self.DecompositionType(A, B, C)
-
     def init_components(self, initial_decomposition=None):
         if self.init.lower() == 'svd':
             self.init_svd()
@@ -127,7 +114,7 @@ class BaseCoupledMatrices(BaseDecomposer):
             self.load_checkpoint(self.init)
         else:
             # TODO: better message
-            raise ValueError('Init method must be either `random`, `cp`, `svd`, `from_checkpoint`, `precomputed` or a path to a checkpoint.')
+            raise ValueError('Init method must be either `random`, `cp`, `parafac2`, `svd`, `from_checkpoint`, `precomputed` or a path to a checkpoint.')
 
 
 class CoupledMatrices_ALS(BaseCoupledMatrices):
@@ -174,12 +161,12 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
             None (default) or a BaseDemposedTensor object containig the 
             initial decomposition. If class's init is not 'precomputed' it is ignored.
         """
-        super()._init_fit(X, max_its=max_its, initial_decomposition=initial_decomposition)
-        
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False]*3
         if self.orthonormality_constraints is None:
             self.orthonormality_constraints = [False]*3
+
+        super()._init_fit(X, max_its=max_its, initial_decomposition=initial_decomposition)
         for mode, (orthogonality) in enumerate(self.orthonormality_constraints):
             fm = self.decomposition.factor_matrices[mode]
             if orthogonality:
@@ -187,6 +174,49 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
 
         self._rel_function_change = np.inf
         self.prev_loss = self.loss
+
+    def init_parafac2(self):
+        X = list(self.X)
+        non_negativity_constraints = copy(self.non_negativity_constraints)
+        non_negativity_constraints[1] = False
+        parafac2_als = Parafac2_ALS(
+        self.rank, 20, non_negativity_constraints=non_negativity_constraints, init='random',
+            print_frequency=-1
+        )
+        parafac2_als.fit(X)
+        A = parafac2_als.decomposition.A
+        B = [B_k for B_k in parafac2_als.decomposition.B]
+        C = parafac2_als.decomposition.C
+
+        if self.non_negativity_constraints[1]:
+            rightsolve = base.non_negative_rightsolve
+        else:
+            rightsolve = base.rightsolve
+
+        for k, (X_k, D_k) in enumerate(zip(X, C)):
+            B[k] = rightsolve((D_k*A).T, X_k.T)
+
+        self.decomposition = self.DecompositionType(A, B, C)
+
+    def init_components(self, initial_decomposition=None):
+        if self.init.lower() == 'svd':
+            self.init_svd()
+        elif self.init.lower() == 'random':
+            self.init_random()
+        elif self.init.lower() == 'cp':
+            self.init_cp()
+        elif self.init.lower() == 'parafac2':
+            self.init_parafac2()
+        elif self.init.lower() == 'from_checkpoint':
+            self.load_checkpoint(initial_decomposition)
+        elif self.init.lower() == 'precomputed':
+            self._check_valid_components(initial_decomposition)
+            self.decomposition = initial_decomposition
+        elif Path(self.init).is_file():
+            self.load_checkpoint(self.init)
+        else:
+            # TODO: better message
+            raise ValueError('Init method must be either `random`, `cp`, `parafac2`, `svd`, `from_checkpoint`, `precomputed` or a path to a checkpoint.')
 
     def _get_rightsolve(self, mode):
         return CP_ALS._get_rightsolve(self, mode)
@@ -324,6 +354,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{self.current_iteration:6d}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
                       f'improvement is {self._rel_function_change:g}')
+                print(f'        The coupling error is {self.coupling_error}')
 
             self._after_fit_iteration()
 
