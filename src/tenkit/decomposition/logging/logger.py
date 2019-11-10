@@ -78,4 +78,24 @@ class ExplainedVarianceLogger(BaseLogger):
     def _log(self, decomposer):
         self.log_metrics.append(decomposer.explained_variance)
 
-    
+class CouplingErrorLogger(BaseLogger):
+    def __init__(self, not_flexible_ok=False):
+        super().__init__()
+        self.not_flexible_ok = not_flexible_ok
+
+    def _log(self, decomposer):
+        if self.not_flexible_ok and not hasattr(decomposer, 'coupling_error'):
+            self.log_metrics.append(1)
+            return
+        self.log_metrics.append(decomposer.coupling_error)
+
+class Parafac2ErrorLogger(BaseLogger):
+    def __init__(self, not_flexible_ok=False):
+        super().__init__()
+        self.not_flexible_ok = not_flexible_ok
+
+    def _log(self, decomposer):
+        if self.not_flexible_ok and not hasattr(decomposer, 'parafac2_error'):
+            self.log_metrics.append(1)
+            return
+        self.log_metrics.append(decomposer.parafac2_error)
