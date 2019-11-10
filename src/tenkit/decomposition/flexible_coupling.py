@@ -180,7 +180,7 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
         non_negativity_constraints = copy(self.non_negativity_constraints)
         non_negativity_constraints[1] = False
         parafac2_als = Parafac2_ALS(
-        self.rank, 20, non_negativity_constraints=non_negativity_constraints, init='random',
+            self.rank, 20, non_negativity_constraints=non_negativity_constraints, init='random',
             print_frequency=-1
         )
         parafac2_als.fit(X)
@@ -192,6 +192,13 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
             rightsolve = base.non_negative_rightsolve
         else:
             rightsolve = base.rightsolve
+
+        for i in range(self.rank):
+            if np.allclose(A[:, i], 0):
+                A[:, i] = np.random.standard_uniform(A[:, i].shape)
+                
+            if np.allclose(C[:, i], 0):
+                C[:, i] = np.random.standard_uniform(C[:, i].shape)
 
         for k, (X_k, D_k) in enumerate(zip(X, C)):
             B[k] = rightsolve((D_k*A).T, X_k.T)
