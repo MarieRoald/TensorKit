@@ -118,6 +118,8 @@ class BaseCoupledMatrices(BaseDecomposer):
 
 
 class CoupledMatrices_ALS(BaseCoupledMatrices):
+    parafac2_init_max_its = 50
+
     def __init__(
         self,
         rank,
@@ -180,7 +182,10 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
         non_negativity_constraints = copy(self.non_negativity_constraints)
         non_negativity_constraints[1] = False
         parafac2_als = Parafac2_ALS(
-            self.rank, 20, non_negativity_constraints=non_negativity_constraints, init='random',
+            self.rank, 
+            self.parafac2_init_max_its,
+            non_negativity_constraints=non_negativity_constraints,
+            init='random',
             print_frequency=-1
         )
         parafac2_als.fit(X)
@@ -200,8 +205,41 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
             if np.allclose(C[:, i], 0):
                 C[:, i] = np.random.standard_uniform(C[:, i].shape)
 
+
         for k, (X_k, D_k) in enumerate(zip(X, C)):
             B[k] = rightsolve((D_k*A).T, X_k.T)
+
+        # If B mode is non-negative and one of the other modes can be flipped
+        # Let us assume that A is not constrained and B is
+        # Then, the PARAFAC2 init (without sign constraints on A and C) might yield
+        # a decomposition where a column in A is flipped and a "slice-column" in B
+        # is flipped. This means that an originally all-positive B would become all-negative
+        # When we run the B update step above, these all-negative B components will be
+        # set to zero. Therefore, we test if any B components are zero everywhere, and if so
+        # we flip the corresponding A mode and find new B components.
+        if not all(self.non_negativity_constraints) and self.non_negativity_constraints[1]:
+            all_zero = [True]*A.shape[1]
+            for B_k in B:
+                for r, B_kr in enumerate(B_k.T):
+                    if not np.allclose(B_kr, 0):
+                        all_zero[r] = False
+
+            # This is only a problem if B mode is non-negative
+            for r, zero_column in enumerate(all_zero):
+                if not zero_column:
+                    continue
+                
+                if not self.non_negativity_constraints[0]:
+                    A[:, r] *= -1
+                elif not self.non_negativity_constraints[2]:
+                    C[:, r] *= -1
+                else:
+                    raise RuntimeError('This should never happen')
+
+            # Compute new B-values
+            if any(all_zero):
+                for k, (X_k, D_k) in enumerate(zip(X, C)):
+                    B[k] = rightsolve((D_k*A).T, X_k.T)
 
         self.decomposition = self.DecompositionType(A, B, C)
 
