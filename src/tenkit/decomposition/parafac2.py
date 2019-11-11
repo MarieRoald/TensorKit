@@ -365,6 +365,11 @@ class Parafac2_ALS(BaseParafac2):
         self.ridge_penalties = ridge_penalties
         self.orthonormality_constraints = orthonormality_constraints
 
+    def init_random(self):
+        """Random initialisation of the factor matrices
+        """
+        self.decomposition = self.DecompositionType.random_init(self.X_shape, rank=self.rank, non_negativity=self.non_negativity_constraints)
+
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.prev_loss = self.loss
