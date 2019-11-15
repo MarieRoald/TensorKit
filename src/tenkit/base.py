@@ -1,5 +1,8 @@
 import numpy as np
 from scipy.optimize import nnls
+import scipy.sparse as sparse
+import scipy.sparse.linalg as spla
+import scipy.linalg
 import h5py
 from abc import ABC, abstractmethod, abstractclassmethod
 
@@ -59,6 +62,7 @@ def add_rightsolve_ridge(rightsolve, ridge_penalty):
         return rightsolve(A_, B_)
     return ridge_rightsolve
 
+
 def add_rightsolve_coupling(rightsolve, coupled_factor_matrix, coupling_penalty):
     def coupling_rightsolve(A, B):
         p, q = A.shape
@@ -72,6 +76,30 @@ def add_rightsolve_coupling(rightsolve, coupled_factor_matrix, coupling_penalty)
         )
         return rightsolve(A_, B_)
     return coupling_rightsolve
+
+
+def create_tikhonov_rightsolve(tikhonov_matrix):
+    def tikhonov_rightsolve(A, B):
+        """Solve min ||XA - B||^2 + tr(X^T L X)
+
+        Assume that A has low rank.
+        """
+        if not sparse.issparse(tikhonov_matrix):
+            perturbed_data = B@A.T
+            return scipy.linalg.solve_sylvester(tikhonov_matrix, A@A.T, perturbed_data)
+
+        U, s, Vh = np.linalg.svd(A, full_matrices=False)
+        perturbed_data = B@(Vh.T*s)
+
+        solution = np.empty((B.shape[0], A.shape[0]))
+
+        identity = sparse.identity(tikhonov_matrix.shape[0])
+        for r, s_r in enumerate(s):
+            solution[:, r] = spla.cg(tikhonov_matrix + identity*s_r**2, perturbed_data[:, r])[0]
+
+        return solution@U.T
+
+    return tikhonov_rightsolve
 
 
 def kron_binary_vectors(u, v):

@@ -60,6 +60,7 @@ class BaseCP(BaseDecomposer):
         If None, no modes are regularised.
     """
     DecompositionType = decompositions.KruskalTensor
+
     def __init__(
         self,
         rank,
@@ -72,6 +73,7 @@ class BaseCP(BaseDecomposer):
         checkpoint_path=None,
         ridge_penalties=None,
         print_frequency=None,
+        tikhonov_matrices=None,
     ):
         super().__init__(
             loggers=loggers,
@@ -84,6 +86,7 @@ class BaseCP(BaseDecomposer):
         self.rank = rank
         self.init = init
         self.ridge_penalties = ridge_penalties
+        self.tikhonov_matrices = tikhonov_matrices
         self.rel_loss_tol = rel_loss_tol
 
     def init_random(self):
@@ -231,11 +234,12 @@ class BaseCP(BaseDecomposer):
         if self.ridge_penalties is not None:
             for ridge, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
                 loss += ridge*np.linalg.norm(factor_matrix)**2
+        if self.tikhonov_matrices is not None:
+            for tikhonov_matrix, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
+                for r in range(self.rank):
+                    loss += factor_matrix[:, r]@(tikhonov_matrices@factor_matrix[:, r])
         return loss
    
-    def _fit(self):
-        return 1 - self.SSE/(self.X_norm**2)
-    
     @property
     def reconstructed_X(self):
         return self.decomposition.construct_tensor()
@@ -247,6 +251,7 @@ class BaseCP(BaseDecomposer):
     @property
     def weights(self):
         return self.decomposition.weights
+
 
 class CP_ALS(BaseCP):
     r"""CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares.
@@ -316,6 +321,7 @@ class CP_ALS(BaseCP):
         non_negativity_constraints=None,
         ridge_penalties=None,
         orthonormality_constraints=None,
+        tikhonov_matrices=None,
     ):
         super().__init__(
             rank=rank,
@@ -327,7 +333,8 @@ class CP_ALS(BaseCP):
             checkpoint_frequency=checkpoint_frequency,
             checkpoint_path=checkpoint_path,
             ridge_penalties=ridge_penalties,
-            print_frequency=print_frequency
+            print_frequency=print_frequency,
+            tikhonov_matrices=tikhonov_matrices,
         )
         self.non_negativity_constraints = non_negativity_constraints
         self.orthonormality_constraints = orthonormality_constraints
@@ -338,6 +345,8 @@ class CP_ALS(BaseCP):
         self.decomposition.reset_weights()
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False]*len(self.factor_matrices)
+        if self.orthonormality_constraints is None:
+            self.orthonormality_constraints = [False]*len(self.factor_matrices)
         if self.orthonormality_constraints is None:
             self.orthonormality_constraints = [False]*len(self.factor_matrices)
         for mode, (orthogonality) in enumerate(self.orthonormality_constraints):
@@ -374,10 +383,16 @@ class CP_ALS(BaseCP):
 
             rightsolve = base.orthogonal_rightsolve
 
-        if self.ridge_penalties is not None:
+        if self.tikhonov_matrices is not None and self.tikhonov_matrices[mode] is not None:
+            if self.orthonormality_constraints[mode] or self.non_negativity_constraints[mode]:
+                raise ValueError('Cannot perform nonnegative or orthogonal solve with Tikhonov penalty')
+
+            rightsolve = base.create_tikhonov_rightsolve(self.tikhonov_matrices[mode])
+
+        if self.ridge_penalties is not None and self.ridge_penalties[mode] is not None:
             ridge_penalty = self.ridge_penalties[mode]
             # fm_shape = np.prod(self.factor_matrices[mode].shape)
-            rightsolve = base.add_rightsolve_ridge(rightsolve, ridge_penalty)#/fm_shape)
+            rightsolve = base.add_rightsolve_ridge(rightsolve, ridge_penalty) #/fm_shape)
         
 
         return rightsolve
@@ -435,3 +450,4 @@ class CP_ALS(BaseCP):
             fm = self.decomposition.factor_matrices[mode]
             if non_negativity:
                 fm[...] = np.abs(fm)
+

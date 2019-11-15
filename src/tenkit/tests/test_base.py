@@ -109,3 +109,23 @@ def test_add_ridge_same_as_soft_coupling():
     assert np.allclose(ridge_rightsolve(A, b), coupled_rightsolve(A, b))
 
 
+def test_tikhonov_rightsolve():
+    rank = 4
+    shape = (50, 60)
+    A = np.random.standard_normal((shape[0], rank))
+    B = np.random.standard_normal((shape[1], rank))
+    X = A@B.T
+
+    L = np.zeros([shape[1]]*2)
+    for i in range(60):
+        L[i, i-1] = -1
+        L[i, i] = 2
+        L[i, (i+1)%shape[1]] = -1
+
+    rightsolve = base.create_tikhonov_rightsolve(L)
+    B_approx = rightsolve(A.T, X.T)
+
+    gradient = (B_approx@A.T - X.T)@A + L@B_approx
+
+    assert np.linalg.norm(gradient.ravel(), np.inf) < 1e-4
+
