@@ -13,7 +13,7 @@ __author__ = "Marie Roald & Yngve Mardal Moe"
 
 
 class BaseDecomposer(ABC):
-    R"""Base class for all TensorKit decomposer objects
+    r"""Base class for all TensorKit decomposer objects
 
     Arguments:
     ----------

@@ -4,6 +4,7 @@ import numpy as np
 from tenkit import base
 from functools import partial
 
+from tenkit.decomposition.decompositions import *
 
 class TestRightsolve:
     random = partial(np.random.uniform, 0, 1)
@@ -95,3 +96,36 @@ class TestOrthogonalRightsolve:
         Y = nonorthogonal_matrix
         product = X@Y
         assert np.linalg.norm(X - self.rightsolve(Y, product))/np.linalg.norm(X) < 1e-5
+
+
+def test_add_ridge_same_as_soft_coupling():
+    A = np.random.randn(2, 3)
+    x = np.random.randn(5, 2)
+    b = x@A
+
+    ridge_rightsolve = base.add_rightsolve_ridge(base.rightsolve, 1)
+    coupled_rightsolve = base.add_rightsolve_coupling(base.rightsolve, np.zeros((5, 2)), 1)
+
+    assert np.allclose(ridge_rightsolve(A, b), coupled_rightsolve(A, b))
+
+
+def test_tikhonov_rightsolve():
+    rank = 4
+    shape = (50, 60)
+    A = np.random.standard_normal((shape[0], rank))
+    B = np.random.standard_normal((shape[1], rank))
+    X = A@B.T
+
+    L = np.zeros([shape[1]]*2)
+    for i in range(60):
+        L[i, i-1] = -1
+        L[i, i] = 2
+        L[i, (i+1)%shape[1]] = -1
+
+    rightsolve = base.create_tikhonov_rightsolve(L)
+    B_approx = rightsolve(A.T, X.T)
+
+    gradient = (B_approx@A.T - X.T)@A + L@B_approx
+
+    assert np.linalg.norm(gradient.ravel(), np.inf) < 1e-4
+
