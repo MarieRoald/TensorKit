@@ -8,6 +8,7 @@ from .. import base
 from .base_decomposer import BaseDecomposer
 from .cp import CP_ALS
 from .parafac2 import Parafac2_ALS
+from .utils import quadratic_form_trace
 from . import decompositions
 from .. import utils
 
@@ -25,6 +26,7 @@ class BaseCoupledMatrices(BaseDecomposer):
         checkpoint_frequency=None,
         checkpoint_path=None,
         ridge_penalties=None,
+        tikhonov_matrices=None,
         print_frequency=None,
     ):
         super().__init__(
@@ -39,6 +41,7 @@ class BaseCoupledMatrices(BaseDecomposer):
         self.init = init
         self.ridge_penalties = ridge_penalties
         self.rel_loss_tol = rel_loss_tol
+        self.tikhonov_matrices = tikhonov_matrices
 
     @property
     def reconstructed_X(self):
@@ -58,10 +61,19 @@ class BaseCoupledMatrices(BaseDecomposer):
         if self.ridge_penalties is not None:
             penalties = self.ridge_penalties
             loss += penalties[0]*np.linalg.norm(self.decomposition.A)**2
-            for matrix in self.decomposition.B:
-                loss += penalties[1]*np.linalg.norm(self.decomposition.B)**2
-            loss += penalties[2]*np.linalg.norm(self.decomposition.B)**2
 
+            loss += penalties[2]*np.linalg.norm(self.decomposition.B)**2
+        if self.tikhonov_matrices is not None:
+            for i, tikhonov_matrix in enumerate(self.tikhonov_matrices):
+                if tikhonov_matrix is None:
+                    continue
+                elif i == 0:
+                    loss += quadratic_form_trace(tikhonov_matrix, self.decomposition.A)
+                elif i == 1:
+                    for matrix in self.decomposition.B:
+                        loss += quadratic_form_trace(tikhonov_matrix, matrix)
+                elif i == 2:
+                    loss += quadratic_form_trace(tikhonov_matrix, self.decomposition.C)
         return loss
    
     def _check_valid_components(self, decomposition):
@@ -134,6 +146,7 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
         non_negativity_constraints=None,
         ridge_penalties=None,
         orthonormality_constraints=None,
+        tikhonov_matrices=None,
     ):
         super().__init__(
             rank=rank,
@@ -145,7 +158,8 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
             checkpoint_frequency=checkpoint_frequency,
             checkpoint_path=checkpoint_path,
             ridge_penalties=ridge_penalties,
-            print_frequency=print_frequency
+            print_frequency=print_frequency,
+            tikhonov_matrices=tikhonov_matrices,
         )
         self.non_negativity_constraints = non_negativity_constraints
         self.orthonormality_constraints = orthonormality_constraints
@@ -208,6 +222,8 @@ class CoupledMatrices_ALS(BaseCoupledMatrices):
 
         for k, (X_k, D_k) in enumerate(zip(X, C)):
             B[k] = rightsolve((D_k*A).T, X_k.T)
+        
+        self.pf2_decomposition = parafac2_als.decomposition
 
         # If B mode is non-negative and one of the other modes can be flipped
         # Let us assume that A is not constrained and B is
@@ -333,6 +349,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         ridge_penalties=None,
         orthonormality_constraints=None,
         signal_to_noise=-1,
+        tikhonov_matrices=None,
     ):
         super().__init__(
             rank=rank,
@@ -347,6 +364,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             print_frequency=print_frequency,
             non_negativity_constraints=non_negativity_constraints,
             orthonormality_constraints=orthonormality_constraints,
+            tikhonov_matrices=tikhonov_matrices,
         )
         self.signal_to_noise = signal_to_noise
 
@@ -423,6 +441,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             None (default) or a BaseDemposedTensor object containig the 
             initial decomposition. If class's init is not 'precomputed' it is ignored.
         """
+        self.pf2_decomposition = None
         X_norm = np.linalg.norm(np.array(X))
         for X_k in X:
             pass
@@ -444,9 +463,10 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
 
         self.coupling_penalties = self._init_coupled_penalties()
 
-        B = np.random.rand(self.rank, self.rank)
-        P = [np.eye(*B_k.shape) for B_k in self.decomposition.B]
-        self.pf2_decomposition = decompositions.Parafac2Tensor(A=self.decomposition.A, blueprint_B=B, projection_matrices=P, C=self.decomposition.C) 
+        if self.pf2_decomposition is None:
+            B = np.random.rand(self.rank, self.rank)
+            P = [np.eye(*B_k.shape) for B_k in self.decomposition.B]
+            self.pf2_decomposition = decompositions.Parafac2Tensor(A=self.decomposition.A, blueprint_B=B, projection_matrices=P, C=self.decomposition.C) 
 
     def _init_coupled_penalties(self):
         self.coupled_penalties = np.empty((self.decomposition.shape[-1]))
@@ -461,7 +481,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
 
     def _update_coupling_penalty(self, it):
         if it == 0:
-            scale = 10**(self.signal_to_noise/10)
+            scale = 10**(-self.signal_to_noise/10)
             estimated_X = self.decomposition.construct_slices()
 
             for k, (X_slice, estimated_X_slice) in enumerate(zip(self.X, estimated_X)):
