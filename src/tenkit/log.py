@@ -1,7 +1,7 @@
 from math import ceil
 import numpy as np
 import h5py
-import base
+from . import base
 
 
 """

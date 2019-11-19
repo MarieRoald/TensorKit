@@ -1,7 +1,7 @@
-from pytensor.log import HDF5Logger, Experiment
+from tenkit.log import HDF5Logger, Experiment
 import numpy as np
-import pytensor.cp as cp
-import pytensor.base
+import tenkit.cp as cp
+import tenkit.base
 import argparse
 from scipy.io import loadmat
 

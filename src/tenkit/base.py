@@ -1,23 +1,75 @@
 import numpy as np
+from scipy.optimize import nnls
+import h5py
+from abc import ABC, abstractmethod, abstractclassmethod
 
-try:
-    from numba import jit, prange
-except ImportError:
-    withjit = False
-    jsafe_range = range
-else:
-    withjit = True
-    make_fast = jit(nopython=True, nogil=True, fastmath=True, parallel=True)
-    jsafe_range = prange
+
+def rightsolve(A, B):
+    """Solve the equation X*A = B wrt X.
+    """
+    U, S, Vh = np.linalg.svd(A, full_matrices=False)
+    S[S != 0] = 1/S[S != 0]
+
+    return B @ (Vh.T * S @ U.T)
+
+
+def non_negative_rightsolve(A, B):
+    """Solve the equation X*A = B wrt X under nonnegativity constraints.
+    """
+    # Discussion tracking in Enron Email Using PARAFAC has non negative updates
+    if len(B.shape) == 1:
+        B = B[np.newaxis, B]
+
+    x = np.zeros((B.shape[0], A.shape[0]))
+    for i, b_i in enumerate(B):
+        x[i, :], _ = nnls(A.T, b_i) 
+
+    return x
+
+
+def orthogonal_rightsolve(A, B):
+    """Solve the equation XA = B wrt X with orthogonality on X
+    """
+    return orthogonal_solve(A.T, B.T).T
+
+
+def orthogonal_solve(A, B):
+    """Solve the equation AX = B wrt X with orthogonality on X
+    """
+    U, S, Vh = np.linalg.svd(B.T@A, full_matrices=False)
+    S_tol = max(U.shape) * S[0] * (1e-16)
+    should_keep = (S > S_tol).astype(float)
+
+    return (Vh.T * should_keep)@ U.T
+
+
+def add_rightsolve_ridge(rightsolve, ridge_penalty):
+    def ridge_rightsolve(A, B):
+        n, m = A.shape
+        p, q = B.shape
+        A_ = np.concatenate(
+            [A, np.sqrt(ridge_penalty)*np.identity(n)],
+            axis=1
+        )
+        B_ = np.concatenate(
+            [B, np.zeros((p, n))],
+            axis=1
+        )
+
+        return rightsolve(A_, B_)
+    return ridge_rightsolve
 
 
 def kron_binary_vectors(u, v):
+    """Efficient Kronecker product between two vectors.
+    """
     n, = u.shape
     m, = v.shape
     kprod = u[:, np.newaxis]*v[np.newaxis, :]
     return kprod.reshape(n*m)
 
 
+# TODO: Test the speed of tensorly's KR computation. Maybe use their expression.
 def khatri_rao_binary(A, B):
     """Calculates the Khatri-Rao product of A and B
     
@@ -29,14 +81,10 @@ def khatri_rao_binary(A, B):
     out = np.empty((I * J, K))
     # for k in range(K)
         # out[:, k] = kron_binary_vectors(A[:, k], B[:, k])
+    # Equivalent but faster with C-contiguous arrays
     for i, row in enumerate(A):
         out[i*J:(i+1)*J] = row[np.newaxis, :]*B
-    #for i in jsafe_range(I):
-    #    out[i*J:(i+1)*J] = A[i]*B
     return out
-
-#if withjit:
-#    khatri_rao_binary = make_fast(khatri_rao_binary)
 
 
 def khatri_rao(*factors, skip=None):
@@ -74,6 +122,8 @@ def khatri_rao(*factors, skip=None):
 
 
 def kron(*factors):
+    """Efficient Kronecker product of multiple matrices.
+    """
     factors = list(factors).copy()
     num_factors = len(factors)
     product = factors[0]
@@ -82,15 +132,28 @@ def kron(*factors):
         product = kron_binary(product, factors[i])
     return product
 
+
 def kron_binary(A, B):
+    """Efficient Kronecker product of the matrix A and B.
+    """
     n, m = A.shape
     p, q = B.shape
     kprod = A[:, np.newaxis, :, np.newaxis]*B[np.newaxis, :, np.newaxis, :]
     return kprod.reshape(n*p, m*q)
 
 
-
 def matrix_khatri_rao_product(X, factors, mode):
+    """Compute the matricised tensor times Khatri Rao product along given mode.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Tensor
+    factors : List[np.ndarray]
+        List of factor matrices, the i-th factor matrix has shape [X.shape[i], rank]
+    mode : int
+        Which mode to unfold the tensor along. Should be between 0 and /len(factors) - 1)
+    """
     assert len(X.shape) == len(factors)
     if len(factors) == 3:
         return _mttkrp3(X, factors, mode)
@@ -176,48 +239,38 @@ def fold(M, n, shape):
     return np.moveaxis(np.reshape(M, newshape), 0, n)
 
 
-def unflatten_factors(A, rank, sizes):
+def unflatten_factors(flattened_factors, rank, sizes):
+    """Transform a flattened set of factor matrices to a list of numpy arrays.
+
+    Parameters
+    ----------
+    flattened_factors : np.ndarray
+        One dimensional numpy array as returned by ``flatten_factors``.
+    rank : int
+        The rank of the decomposition
+    sizes : Iterable[int]
+        The length of each mode of the tensor the factor matrices represent.
+    """
     n_modes = len(sizes)
     offset = 0
 
     factors = []
     for i, s in enumerate(sizes):
         stop = offset + (s * rank)
-        matrix = A[offset:stop].reshape(s, rank)
+        matrix = flattened_factors[offset:stop].reshape(s, rank)
         factors.append(matrix)
         offset = stop
     return factors
 
 
-def flatten_factors(factors):
-    sizes = [np.prod(factor.shape) for factor in factors]
+def flatten_factors(factor_matrices):
+    """Transform the list of factor matrices to a vector.
+
+    Inverted by ``unflatten_factors``.
+    """
+    sizes = [np.prod(factor.shape) for factor in factor_matrices]
     offsets = np.cumsum([0] + sizes)[:-1]
     flattened = np.empty(np.sum(sizes))
-    for offset, size, factor in zip(offsets, sizes, factors):
+    for offset, size, factor in zip(offsets, sizes, factor_matrices):
         flattened[offset : offset + size] = factor.ravel()
     return flattened
-
-
-def ktensor(*factors, weights=None):
-    """Creates a tensor from Kruskal factors, 
-    
-    Parameters
-    ----------
-    *factors : np.ndarray list
-        List of factor matrices. All factor matrices need to
-        have the same number of columns. 
-    weights: np.ndarray (Optional)
-        Vector array of shape (1, rank) that contains the weights 
-        for each component of the Kruskal composition.
-        If None, each factor matrix is assaign a weight of one.
-    """
-    if weights is None:
-        weights = np.ones_like(factors[0])
-
-    if len(weights.shape) == 1:
-        weights = weights[np.newaxis, ...]
-
-    shape = [f.shape[0] for f in factors]
-    tensor = (weights * factors[0]) @ khatri_rao(*factors[1:]).T
-
-    return fold(tensor, 0, shape=shape)
