@@ -5,11 +5,13 @@ import itertools
 
 import h5py
 import pytest
+from scipy.optimize import check_grad
 import numpy as np
 from .test_utils import ensure_monotonicity
 from tenkit.decomposition import cp
 from tenkit.decomposition import decompositions
 from tenkit import metrics
+from tenkit import base
 # Husk: Test at weights og factors endres inplace
 
 
@@ -117,3 +119,49 @@ class TestCPALS:
                 assert np.allclose(fm1, fm2)
             
             assert np.allclose(cp_als.decomposition.weights, cp_als2.decomposition.weights)
+
+
+        
+class TestCPOPT:
+    CP = cp.CP_OPT
+    convergence_tol = 1e-20
+
+    @pytest.fixture
+    def rank4_kruskal_tensor(self):
+        ktensor = decompositions.KruskalTensor.random_init((30, 40, 50), rank=4)
+        ktensor.normalize_components()
+        return ktensor
+
+    def test_gradient_finite_difference(self, rank4_kruskal_tensor):
+        X = rank4_kruskal_tensor.construct_tensor()
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
+        cp_opt._init_fit(
+            X=X, max_its=cp_opt.max_its, initial_decomposition=None
+        )
+        flattened = base.flatten_factors(cp_opt.decomposition)
+        loss = lambda factors: cp_opt._cp_loss_scipy(factors, 4, X.shape, X)
+        derivative = lambda factors: cp_opt._cp_grad_scipy(factors, 4, X.shape, X)
+
+        assert check_grad(loss, derivative, flattened) < 1e-5
+    
+    def check_decomposition(self, kruskal_tensor, *, test_closeness=True, test_fms=True, **additional_params):
+
+        X = kruskal_tensor.construct_tensor()
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, **additional_params)
+        estimated_ktensor = cp_opt.fit_transform(X)
+        estimated_ktensor.normalize_components()
+
+        if test_closeness:
+            assert 1 - np.linalg.norm(X - estimated_ktensor.construct_tensor())/np.linalg.norm(X) > 0.999
+        if test_fms:
+            assert metrics.factor_match_score(
+                kruskal_tensor.factor_matrices, estimated_ktensor.factor_matrices
+            )[0] > 1-1e-7
+        
+    def test_rank4_decomposition(self, rank4_kruskal_tensor):
+        self.check_decomposition(rank4_kruskal_tensor)
+
+    #def test_rank4_nonnegative_decomposition(self, nonnegative_rank4_kruskal_tensor):
+    #    self.check_decomposition(nonnegative_rank4_kruskal_tensor, non_negativity_constraints=[True, True, True])
+    
+        

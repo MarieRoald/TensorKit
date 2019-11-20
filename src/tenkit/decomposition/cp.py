@@ -3,7 +3,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-from scipy.optimize import nnls
+import scipy.optimize as optimize
 
 from .base_decomposer import BaseDecomposer
 from . import decompositions
@@ -253,6 +253,17 @@ class BaseCP(BaseDecomposer):
         return self.decomposition.weights
 
 
+def get_sse_lhs(factor_matrices, mode):
+    """Compute left hand side of least squares problem."""
+    rank = factor_matrices[0].shape[1]
+    V = np.ones((rank, rank))
+    for i, factor_matrix in enumerate(factor_matrices):
+        if i == mode:
+            continue
+        V *= factor_matrix.T @ factor_matrix
+    return V
+
+
 class CP_ALS(BaseCP):
     r"""CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares.
 
@@ -360,14 +371,9 @@ class CP_ALS(BaseCP):
         self._matrix_khatri_rao_product_cache = None
         # self._matrix_khatri_rao_product_cache = [np.empty_like(factor) for factor in self.factor_matrices]
 
-    def _get_als_lhs(self, skip_mode):
+    def _get_als_lhs(self, mode):
         """Compute left hand side of least squares problem."""
-        V = np.ones((self.rank, self.rank))
-        for i, factor in enumerate(self.factor_matrices):
-            if i == skip_mode:
-                continue
-            V *= factor.T @ factor
-        return V
+        return get_sse_lhs(self.factor_matrices, mode)
     
     def _get_als_rhs(self, mode):
         return base.matrix_khatri_rao_product(self.X, self.factor_matrices, mode)
@@ -451,3 +457,166 @@ class CP_ALS(BaseCP):
             if non_negativity:
                 fm[...] = np.abs(fm)
 
+
+class CP_OPT(BaseCP):
+    def __init__(
+        self,
+        rank,
+        max_its,
+        convergence_tol=1e-10,
+        init='random',
+        loggers=None,
+        checkpoint_frequency=None,
+        checkpoint_path=None,
+        print_frequency=10,
+        lower_bounds=None,
+        upper_bounds=None,
+        method='cg'
+    ):
+        super().__init__(
+            rank=rank,
+            max_its=max_its,
+            convergence_tol=convergence_tol,
+            init=init,
+            loggers=loggers,
+            checkpoint_frequency=checkpoint_frequency,
+            checkpoint_path=checkpoint_path
+        )
+        self.print_frequency = print_frequency
+        self.lower_bounds = lower_bounds
+        self.upper_bounds = upper_bounds
+        self.method = 'l-bfgs-b'
+
+    def _init_fit(self, X, max_its, initial_decomposition):
+        if max_its is None:
+            max_its = self.max_its
+
+        super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
+        self.options = {'maxiter':max_its, 'gtol': self.convergence_tol}
+
+        self.bounds = self.create_bounds(self.lower_bounds, self.upper_bounds, X, self.rank)
+        self.initial_factors_flattened = base.flatten_factors(self.decomposition.factor_matrices)
+
+    def create_bounds(self, lower_bounds, upper_bounds, sizes, rank):
+
+        if (lower_bounds is None) and (upper_bounds is None):
+            return None
+
+        if lower_bounds is None:
+            lower_bounds = -np.inf
+        if upper_bounds is None:
+            upper_bounds = np.inf
+
+        lower_bounds = self._create_bounds(lower_bounds, sizes, rank)
+        upper_bounds = self._create_bounds(upper_bounds, sizes, rank)
+
+        return self._bounds_scipy(lower_bounds, upper_bounds)
+
+    def _create_bounds(self, bounds, sizes, rank):
+
+        if self._isiterable(bounds) == False:
+            if bounds is None:
+                bounds = np.inf
+            bounds = [bounds] * len(sizes)
+        # TODO: assert bounds length = sizes length?
+        full_bounds = []
+
+        for size, bound in zip(sizes, bounds):
+            full_bounds.append(np.full((size, rank), fill_value=bound))
+
+        return full_bounds
+
+    def _bounds_scipy(self, lower_bounds, upper_bounds):
+        upper = base.flatten_factors(upper_bounds)
+        lower = base.flatten_factors(lower_bounds)
+
+        return optimize.Bounds(lb=lower, ub=upper)
+
+    def _isiterable(self, var):
+        #TODO: flytt dette til utils?
+        try:
+            iter(var)
+        except TypeError:
+            return False
+        else:
+            return True
+
+    def _fit(self):
+        """Fit a CP model with Alternating Least Squares.
+        """
+        result = optimize.minimize(
+            fun=self._cp_loss_scipy,
+            method=self.method,
+            x0=self.initial_factors_flattened,
+            jac=self._cp_grad_scipy,
+            bounds=self.bounds,
+            args=(self.rank, self.X.shape, self.X),
+            options=self.options,
+            callback=None
+        )
+
+        factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
+        self.decomposition = decompositions.KruskalTensor(factor_matrices)
+        return self.decomposition, result
+
+    def cp_loss(self, factor_matrices, tensor):
+        """Loss function for a CP (CANDECOMP/PARAFAC) model.
+
+        Loss(X) = ||X - [[F_0, F_1, ..., F_k]]||^2
+
+        Parameters:
+        -----------
+        factor: list of np.ndarray
+            List containing factor matrices for a CP model.
+        tensor: np.ndarray
+            Tensor we are attempting to model with CP.
+
+        Returns:
+        --------
+        float:
+            Loss value
+        """
+        reconstructed_tensor = decompositions.KruskalTensor(factor_matrices).construct_tensor()
+        return 0.5 * np.linalg.norm(tensor - reconstructed_tensor) ** 2
+
+    def cp_grad(self, factor_matrices, X):
+        """Gradients for CP loss."""
+        grad_A = []
+
+        for mode, factor_matrix in enumerate(factor_matrices):
+            grad_A.append(
+                -base.matrix_khatri_rao_product(X, factor_matrices, mode)
+                + factor_matrix @ get_sse_lhs(factor_matrices, mode)
+            )
+        return grad_A
+
+
+    def _cp_loss_scipy(self, A, *args):
+        """The CP loss for scipy.optimize.minimize
+
+        from scipy documentation:
+        scipy.optimize.minimize takes an objective function fun(x, *args)
+        where x is an 1-D array with shape (n,) and args is a tuple of the 
+        fixed parameters needed to completely specify the function.
+
+        Parameters:
+        -----------
+        A: np.ndarray 
+            1D array of shape (n,) containing the parameters to minimize over.
+        *args: tuple
+            The fixed parameters needed to completely specify the function.
+        """
+        rank, sizes, X = args
+        factor_matrices = base.unflatten_factors(A, rank, sizes)
+        return self.cp_loss(factor_matrices, X)
+
+
+    def _cp_grad_scipy(self, A, *args):
+        """
+
+        """
+        rank, sizes, X = args
+
+        factor_matrices = base.unflatten_factors(A, rank, sizes)
+        grad = self.cp_grad(factor_matrices, X)
+        return base.flatten_factors(grad)
