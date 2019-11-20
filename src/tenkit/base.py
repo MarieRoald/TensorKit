@@ -1,10 +1,11 @@
+from abc import ABC, abstractclassmethod, abstractmethod
+
+import h5py
 import numpy as np
-from scipy.optimize import nnls
+import scipy.linalg
 import scipy.sparse as sparse
 import scipy.sparse.linalg as spla
-import scipy.linalg
-import h5py
-from abc import ABC, abstractmethod, abstractclassmethod
+from scipy.optimize import nnls
 
 
 def rightsolve(A, B):

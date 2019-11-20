@@ -1,10 +1,9 @@
 import h5py
 import numpy as np
-from .cp import CP_ALS
 
-from ..base import unfold
 from .. import base
-
+from ..base import unfold
+from .cp import CP_ALS
 
 
 class CMTF_ALS(CP_ALS): 

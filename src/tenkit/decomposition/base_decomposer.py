@@ -4,10 +4,11 @@ Contains the base class for all decomposition methods in TensorKit
 
 
 from abc import ABC, abstractmethod, abstractproperty
-from . import decompositions
-import numpy as np
-import h5py
 
+import h5py
+import numpy as np
+
+from . import decompositions
 
 __author__ = "Marie Roald & Yngve Mardal Moe"
 

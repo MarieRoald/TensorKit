@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
+
 import numpy as np
+
 # TODO: More loggers
 # - gradient logger (need to implement gradient for decomposer first)
 

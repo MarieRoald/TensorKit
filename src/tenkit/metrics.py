@@ -1,9 +1,10 @@
 #TODO: Let us tidu up this a bit
-import numpy as np
 import itertools
-from . import base
+
+import numpy as np
 import scipy
-from . import utils
+
+from . import base, utils
 
 
 def weight_score(weight1, weight2):

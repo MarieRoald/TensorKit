@@ -1,1 +1,1 @@
-from . import base, metrics, utils, decomposition
+from . import base, decomposition, metrics, utils

@@ -1,16 +1,16 @@
-import tempfile
 import itertools
+import tempfile
 from pathlib import Path
 
-import pytest
-import numpy as np
 import h5py
+import numpy as np
+import pytest
+
+from tenkit import base, metrics
+from tenkit.decomposition import decompositions, parafac2
 
 from .test_utils import ensure_monotonicity
-from tenkit.decomposition import parafac2
-from tenkit.decomposition import decompositions
-from tenkit import base
-from tenkit import metrics
+
 # Husk: Test at weights og factors endres inplace
 # TODO: test factor match score
 

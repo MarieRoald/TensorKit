@@ -1,5 +1,7 @@
-import numpy as np
 from copy import deepcopy
+
+import numpy as np
+
 from . import base
 
 
@@ -228,4 +230,3 @@ def slice_SSE(X_slices1, X_slices2):
     for slice1, slice2, in zip(X_slices1, X_slices2):
         SSE += np.sum((slice1-slice2)**2)
     return SSE
-    

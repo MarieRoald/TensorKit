@@ -1,7 +1,9 @@
-import pytest
-from tenkit.decomposition import decompositions
 import tempfile
+
 import numpy as np
+import pytest
+
+from tenkit.decomposition import decompositions
 
 
 class TestKruskalTensor:

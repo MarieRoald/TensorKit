@@ -1,5 +1,6 @@
-import pytest
 import numpy as np
+import pytest
+
 from tenkit import metrics
 from tenkit.decomposition.decompositions import Parafac2Tensor
 
@@ -19,4 +20,3 @@ class TestCoreConsistency:
         
         cc = np.asscalar(metrics.core_consistency_parafac2(X, P, A, B, C))
         assert abs(cc-100) < 1e-10
-        

@@ -5,11 +5,10 @@ import h5py
 import numpy as np
 import scipy.optimize as optimize
 
-from .base_decomposer import BaseDecomposer
-from . import decompositions
 from .. import base
 from ..utils import normalize_factors
-
+from . import decompositions
+from .base_decomposer import BaseDecomposer
 
 __all__ = ['CP_ALS']
 

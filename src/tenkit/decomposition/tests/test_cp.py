@@ -1,17 +1,18 @@
-from pathlib import Path
+import itertools
 import tempfile
 from functools import wraps
-import itertools
+from pathlib import Path
 
 import h5py
+import numpy as np
 import pytest
 from scipy.optimize import check_grad
-import numpy as np
+
+from tenkit import base, metrics
+from tenkit.decomposition import cp, decompositions
+
 from .test_utils import ensure_monotonicity
-from tenkit.decomposition import cp
-from tenkit.decomposition import decompositions
-from tenkit import metrics
-from tenkit import base
+
 # Husk: Test at weights og factors endres inplace
 
 
@@ -163,5 +164,3 @@ class TestCPOPT:
 
     #def test_rank4_nonnegative_decomposition(self, nonnegative_rank4_kruskal_tensor):
     #    self.check_decomposition(nonnegative_rank4_kruskal_tensor, non_negativity_constraints=[True, True, True])
-    
-        

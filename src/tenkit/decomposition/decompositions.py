@@ -1,10 +1,9 @@
-import numpy as np
-import h5py
-from abc import ABC, abstractmethod, abstractclassmethod
-from .. import base
-from .. import metrics
-from .. import utils
+from abc import ABC, abstractclassmethod, abstractmethod
 
+import h5py
+import numpy as np
+
+from .. import base, metrics, utils
 
 __all__ = ['KruskalTensor', 'EvolvingTensor', 'Parafac2Tensor']
 

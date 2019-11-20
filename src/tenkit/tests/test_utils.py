@@ -1,5 +1,7 @@
-from tenkit import utils
 import numpy as np
+
+from tenkit import utils
+
 
 def test_get_signs():
     X = np.identity(10)

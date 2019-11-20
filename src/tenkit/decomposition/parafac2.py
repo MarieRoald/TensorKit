@@ -1,14 +1,13 @@
+import warnings
 from abc import abstractmethod
 from pathlib import Path
-import warnings
-import numpy as np
-from .base_decomposer import BaseDecomposer
-from . import decompositions
-from . import cp
-from ..utils import normalize_factors, get_pca_loadings
-from .. import base
-from .. import utils
 
+import numpy as np
+
+from .. import base, utils
+from ..utils import get_pca_loadings, normalize_factors
+from . import cp, decompositions
+from .base_decomposer import BaseDecomposer
 
 __all__ = ['Parafac2_ALS']
 

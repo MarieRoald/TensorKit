@@ -1,10 +1,12 @@
 import tempfile
-import pytest
-import numpy as np
-from tenkit import base
 from functools import partial
 
+import numpy as np
+import pytest
+
+from tenkit import base
 from tenkit.decomposition.decompositions import *
+
 
 class TestRightsolve:
     random = partial(np.random.uniform, 0, 1)
@@ -128,4 +130,3 @@ def test_tikhonov_rightsolve():
     gradient = (B_approx@A.T - X.T)@A + L@B_approx
 
     assert np.linalg.norm(gradient.ravel(), np.inf) < 1e-4
-

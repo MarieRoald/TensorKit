@@ -1,13 +1,12 @@
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import h5py
-import pytest
 import numpy as np
-from tenkit.decomposition import cp
-from tenkit.decomposition import decompositions
+import pytest
+
 from tenkit import metrics
-from tenkit.decomposition import cmtf
+from tenkit.decomposition import cmtf, cp, decompositions
 
 np.random.seed(0)
 

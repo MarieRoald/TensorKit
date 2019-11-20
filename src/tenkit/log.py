@@ -1,6 +1,8 @@
 from math import ceil
-import numpy as np
+
 import h5py
+import numpy as np
+
 from . import base
 
 
@@ -176,4 +178,3 @@ class Experiment:
                     g[pname] = param
                 else:
                     g[pname][...] = param
-

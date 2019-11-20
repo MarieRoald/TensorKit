@@ -15,4 +15,3 @@ def ensure_monotonicity(decomposer, function, loss, skips=0, rtol=1e-10, atol=1e
             skips -= 1
         return return_val
     return new_func
-

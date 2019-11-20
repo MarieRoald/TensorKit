@@ -4,13 +4,12 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from .. import base
+from .. import base, utils
+from . import decompositions
 from .base_decomposer import BaseDecomposer
 from .cp import CP_ALS
 from .parafac2 import Parafac2_ALS
 from .utils import quadratic_form_trace
-from . import decompositions
-from .. import utils
 
 
 class BaseCoupledMatrices(BaseDecomposer):

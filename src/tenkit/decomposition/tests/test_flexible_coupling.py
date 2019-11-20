@@ -1,8 +1,7 @@
 import numpy as np
 
-from tenkit.decomposition import flexible_coupling as fc
-
 from tenkit.decomposition import decompositions
+from tenkit.decomposition import flexible_coupling as fc
 
 
 class TestFlexibleParafac2ALS:
