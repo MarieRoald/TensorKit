@@ -349,6 +349,8 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         orthonormality_constraints=None,
         signal_to_noise=-1,
         tikhonov_matrices=None,
+        coupling_strength=None,
+        normalise_tensor=True
     ):
         super().__init__(
             rank=rank,
@@ -366,6 +368,8 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             tikhonov_matrices=tikhonov_matrices,
         )
         self.signal_to_noise = signal_to_noise
+        self._coupling_strength = coupling_strength
+        self.normalise_tensor = normalise_tensor
 
     def _get_rightsolve(self, mode, k=None):
         rightsolve = CP_ALS._get_rightsolve(self, mode)
@@ -441,10 +445,11 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             initial decomposition. If class's init is not 'precomputed' it is ignored.
         """
         self.pf2_decomposition = None
-        X_norm = np.linalg.norm(np.array(X))
-        for X_k in X:
-            pass
-            X_k[...] /= X_norm
+        if self.normalise_tensor:
+            X_norm = np.linalg.norm(np.array(X))
+            for X_k in X:
+                pass
+                X_k[...] /= X_norm
         
         super()._init_fit(X, max_its=max_its, initial_decomposition=initial_decomposition)
         
@@ -479,6 +484,9 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         return self.coupled_penalties
 
     def _update_coupling_penalty(self, it):
+        if self._coupling_strength is not None:
+            self.coupling_penalties[:] = self._coupling_strength
+            return
         if it == 0:
             scale = 10**(-self.signal_to_noise/10)
             estimated_X = self.decomposition.construct_slices()
