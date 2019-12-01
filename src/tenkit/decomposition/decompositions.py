@@ -206,6 +206,9 @@ class KruskalTensor(BaseDecomposedTensor):
     
     def __getitem__(self, item):
         return self.factor_matrices[item]
+    
+    def __len__(self):
+        return len(self.factor_matrices)
 
     def factor_match_score(self, decomposition, weight_penalty=True, fms_reduction='min'):
         assert decomposition.rank == self.rank
