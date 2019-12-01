@@ -7,10 +7,11 @@ import scipy.optimize as optimize
 
 from .. import base
 from ..utils import normalize_factors
+from .utils import quadratic_form_trace
 from . import decompositions
 from .base_decomposer import BaseDecomposer
 
-__all__ = ['CP_ALS']
+__all__ = ['CP_ALS', 'CP_OPT']
 
 
 class BaseCP(BaseDecomposer):
@@ -185,7 +186,7 @@ class BaseCP(BaseDecomposer):
     @property
     def _inner_prod_X_reconstructed_X(self):
         M = self.factor_matrices[self._last_updated_mode]*self._matrix_khatri_rao_product_cache
-        return np.sum(self.weights*M.sum(0), axis=0)
+        return np.sum(self.decomposition.weights*M.sum(0), axis=0)
 
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
@@ -470,7 +471,9 @@ class CP_OPT(BaseCP):
         print_frequency=10,
         lower_bounds=None,
         upper_bounds=None,
-        method='cg'
+        method='cg',
+        mask=None,
+        factor_constraints=None
     ):
         super().__init__(
             rank=rank,
@@ -486,10 +489,15 @@ class CP_OPT(BaseCP):
         self.upper_bounds = upper_bounds
         self.method = 'l-bfgs-b'
 
-    def _init_fit(self, X, max_its, initial_decomposition):
+        self.factor_constraints = factor_constraints
+
+    def _init_fit(self, X, max_its, initial_decomposition, importance_weights):
         if max_its is None:
             max_its = self.max_its
-
+        if self.factor_constraints is None:
+            self.factor_constraints = [{} for _ in X.shape]
+        self.importance_weights = importance_weights
+        
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.options = {'maxiter':max_its, 'gtol': self.convergence_tol}
 
@@ -509,7 +517,7 @@ class CP_OPT(BaseCP):
         lower_bounds = self._create_bounds(lower_bounds, sizes, rank)
         upper_bounds = self._create_bounds(upper_bounds, sizes, rank)
 
-        return self._bounds_scipy(lower_bounds, upper_bounds)
+        return self._flattened_bounds(lower_bounds, upper_bounds)
 
     def _create_bounds(self, bounds, sizes, rank):
 
@@ -525,7 +533,7 @@ class CP_OPT(BaseCP):
 
         return full_bounds
 
-    def _bounds_scipy(self, lower_bounds, upper_bounds):
+    def _flattened_bounds(self, lower_bounds, upper_bounds):
         upper = base.flatten_factors(upper_bounds)
         lower = base.flatten_factors(lower_bounds)
 
@@ -544,12 +552,11 @@ class CP_OPT(BaseCP):
         """Fit a CP model with Alternating Least Squares.
         """
         result = optimize.minimize(
-            fun=self._cp_loss_scipy,
+            fun=self._flattened_loss,
             method=self.method,
             x0=self.initial_factors_flattened,
-            jac=self._cp_grad_scipy,
+            jac=self._flattened_gradient,
             bounds=self.bounds,
-            args=(self.rank, self.X.shape, self.X),
             options=self.options,
             callback=None
         )
@@ -558,7 +565,61 @@ class CP_OPT(BaseCP):
         self.decomposition = decompositions.KruskalTensor(factor_matrices)
         return self.decomposition, result
 
-    def cp_loss(self, factor_matrices, tensor):
+    def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, importance_weights=None):
+        """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
+
+        Arguments:
+        ----------
+        X : np.ndarray
+            The tensor to fit
+        y : None
+            Ignored, included to follow sklearn standards.
+        max_its : int (optional)
+            If set, then this will override the class's max_its.
+        initial_decomposition : tenkit.decomposition.decompositions.KruskalTensor or str
+            The initial KruskalTensor (init=precomputed) to use or the path of the 
+            logfile to load (init=from_file).
+        importance_weights : np.ndarray
+            Weights used for missing data imputation.
+        """
+        self._init_fit(
+            X=X, max_its=max_its, initial_decomposition=initial_decomposition, importance_weights=importance_weights
+        )
+        self._fit()
+
+    def fit_transform(self, X, y=None, *, max_its=None, initial_decomposition=None, importance_weights=None):
+        """Fit a CP model and return kruskal tensor. 
+        
+        Precomputed components must be specified if init method is `precomputed`.
+
+        Arguments:
+        ----------
+        X : np.ndarray
+            The tensor to fit
+        y : None
+            Ignored, included to follow sklearn standards.
+        max_its : int (optional)
+            If set, then this will override the class's max_its.
+        initial_decomposition : tuple
+            A tuple parametrising a Kruskal tensor.
+            The first element is a list of factor matrices and the second element is an array containing the weights.
+        importance_weights : np.ndarray
+            Weights used for missing data imputation.
+        """
+        self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition, importance_weights=importance_weights)
+        return self.decomposition
+
+    @property
+    def SSE(self):
+        return 2*self._compute_weighted_SSE(self.decomposition.factor_matrices, self.X)
+
+    @property
+    def MSE(self):
+        if self.importance_weights is not None:
+            return self.SSE / self.weights.sum()
+        return self.SSE / np.prod(self.X.shape)
+
+    def _compute_weighted_SSE(self, factor_matrices):
         """Loss function for a CP (CANDECOMP/PARAFAC) model.
 
         Loss(X) = ||X - [[F_0, F_1, ..., F_k]]||^2
@@ -576,46 +637,71 @@ class CP_OPT(BaseCP):
             Loss value
         """
         reconstructed_tensor = decompositions.KruskalTensor(factor_matrices).construct_tensor()
-        return 0.5 * np.linalg.norm(tensor - reconstructed_tensor) ** 2
+        if self.importance_weights is None:
+            return 0.5 * np.linalg.norm(self.X - reconstructed_tensor) ** 2
 
-    def cp_grad(self, factor_matrices, X):
+        # Computed weighted loss
+        weighted_tensor = self.importance_weights*self.X
+        weighted_reconstructed_tensor = self.importance_weights*reconstructed_tensor
+
+        return 0.5*np.linalg.norm(weighted_tensor-weighted_reconstructed_tensor)**2
+    
+    def _compute_loss(self, factor_matrices):
+        loss = self._compute_weighted_SSE(factor_matrices)
+
+        for i, fm in enumerate(factor_matrices):
+            if 'tikhonov_matrix' in self.factor_constraints[i]:
+                tikhonov_matrix = self.factor_constraints[i]['tikhonov_matrix']
+                loss += 0.5*quadratic_form_trace(tikhonov_matrix, fm)
+            elif 'ridge' in self.factor_constraints[i]:
+                loss += 0.5*self.factor_constraints[i]['ridge']*(np.linalg.norm(fm, 'fro')**2)
+        return loss
+
+    def _compute_weighted_gradient(self, factor_matrices):
         """Gradients for CP loss."""
-        grad_A = []
+        gradients = []
+        if self.importance_weights is None:
 
-        for mode, factor_matrix in enumerate(factor_matrices):
-            grad_A.append(
-                -base.matrix_khatri_rao_product(X, factor_matrices, mode)
-                + factor_matrix @ get_sse_lhs(factor_matrices, mode)
-            )
-        return grad_A
+            for mode, factor_matrix in enumerate(factor_matrices):
+                gradients.append(
+                    -base.matrix_khatri_rao_product(self.X, factor_matrices, mode)
+                    + factor_matrix @ get_sse_lhs(factor_matrices, mode)
+                )
 
+        else:
+            weighted_X = self.importance_weights*self.X
+            reconstructed_tensor = decompositions.KruskalTensor(factor_matrices).construct_tensor()
+            weighted_pred = self.importance_weights*reconstructed_tensor
+            error = weighted_pred - weighted_X
 
-    def _cp_loss_scipy(self, A, *args):
+            for mode in range(len(factor_matrices)):
+                khatri_rao = base.khatri_rao(*factor_matrices, skip=mode)
+                gradients.append(base.unfold(error, n=mode) @ khatri_rao)
+
+        return gradients
+    
+    def _compute_gradient(self, factor_matrices):
+        gradients = self._compute_weighted_gradient(factor_matrices)
+        for i, (fm, grad) in enumerate(zip(factor_matrices, gradients)):
+            if 'tikhonov_matrix' in self.factor_constraints[i]:
+                tikhonov_matrix = self.factor_constraints[i]['tikhonov_matrix']
+                grad += tikhonov_matrix@fm
+            elif 'ridge' in self.factor_constraints[i]:
+                grad += self.factor_constraints[i]['ridge']*fm
+        return gradients
+
+    def _flattened_loss(self, flattened_factors):
         """The CP loss for scipy.optimize.minimize
-
-        from scipy documentation:
-        scipy.optimize.minimize takes an objective function fun(x, *args)
-        where x is an 1-D array with shape (n,) and args is a tuple of the 
-        fixed parameters needed to completely specify the function.
 
         Parameters:
         -----------
-        A: np.ndarray 
+        flattened_factors : np.ndarray 
             1D array of shape (n,) containing the parameters to minimize over.
-        *args: tuple
-            The fixed parameters needed to completely specify the function.
         """
-        rank, sizes, X = args
-        factor_matrices = base.unflatten_factors(A, rank, sizes)
-        return self.cp_loss(factor_matrices, X)
+        factor_matrices = base.unflatten_factors(flattened_factors, self.rank, self.X.shape)
+        return self._compute_loss(factor_matrices)
 
-
-    def _cp_grad_scipy(self, A, *args):
-        """
-
-        """
-        rank, sizes, X = args
-
-        factor_matrices = base.unflatten_factors(A, rank, sizes)
-        grad = self.cp_grad(factor_matrices, X)
+    def _flattened_gradient(self, flattened_factors):
+        factor_matrices = base.unflatten_factors(flattened_factors, self.rank, self.X.shape)
+        grad = self._compute_gradient(factor_matrices)
         return base.flatten_factors(grad)
