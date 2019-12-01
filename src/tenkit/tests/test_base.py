@@ -3,6 +3,7 @@ from functools import partial
 
 import numpy as np
 import pytest
+from scipy import sparse
 
 from tenkit import base
 from tenkit.decomposition.decompositions import *
@@ -114,19 +115,29 @@ def test_add_ridge_same_as_soft_coupling():
 def test_tikhonov_rightsolve():
     rank = 4
     shape = (50, 60)
-    A = np.random.standard_normal((shape[0], rank))
-    B = np.random.standard_normal((shape[1], rank))
-    X = A@B.T
+    for k in range(50):
+        A = np.random.standard_normal((shape[0], rank))*(2**(k%20 - 10))
+        B = np.random.standard_normal((shape[1], rank))
+        X = A@B.T
 
-    L = np.zeros([shape[1]]*2)
-    for i in range(60):
-        L[i, i-1] = -1
-        L[i, i] = 2
-        L[i, (i+1)%shape[1]] = -1
+        L = np.zeros([shape[1]]*2)
+        for i in range(60):
+            L[i, i-1] = -1
+            L[i, i] = 2
+            L[i, (i+1)%shape[1]] = -1
 
-    rightsolve = base.create_tikhonov_rightsolve(L)
-    B_approx = rightsolve(A.T, X.T)
+        rightsolve = base.create_tikhonov_rightsolve(L)
+        B_approx = rightsolve(A.T, X.T)
 
-    gradient = (B_approx@A.T - X.T)@A + L@B_approx
+        gradient = (B_approx@A.T - X.T)@A + L@B_approx
 
-    assert np.linalg.norm(gradient.ravel(), np.inf) < 1e-4
+        assert np.linalg.norm(gradient.ravel(), np.inf) < 1e-4, str(k)
+
+        L = sparse.csr_matrix(L)
+
+        rightsolve = base.create_tikhonov_rightsolve(L)
+        B_approx = rightsolve(A.T, X.T)
+
+        gradient = (B_approx@A.T - X.T)@A + L@B_approx
+
+        assert np.linalg.norm(gradient.ravel(), np.inf) < 1e-1, f"{k}, {k%20 - 10}"

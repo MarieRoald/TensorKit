@@ -79,6 +79,10 @@ def add_rightsolve_coupling(rightsolve, coupled_factor_matrix, coupling_penalty)
     return coupling_rightsolve
 
 
+class NotConvergedError(Exception):
+    pass
+
+
 def create_tikhonov_rightsolve(tikhonov_matrix):
     def tikhonov_rightsolve(A, B):
         """Solve min ||XA - B||^2 + tr(X^T L X)
@@ -96,7 +100,10 @@ def create_tikhonov_rightsolve(tikhonov_matrix):
 
         identity = sparse.identity(tikhonov_matrix.shape[0])
         for r, s_r in enumerate(s):
-            solution[:, r] = spla.cg(tikhonov_matrix + identity*s_r**2, perturbed_data[:, r])[0]
+            cg_solution = spla.cg(tikhonov_matrix + identity*s_r**2, perturbed_data[:, r], atol=0)
+            if cg_solution[1] > 0:
+                raise NotConvergedError
+            solution[:, r] = cg_solution[0]
 
         return solution@U.T
 
