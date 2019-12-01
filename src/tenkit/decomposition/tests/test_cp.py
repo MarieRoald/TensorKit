@@ -132,18 +132,42 @@ class TestCPOPT:
         ktensor = decompositions.KruskalTensor.random_init((30, 40, 50), rank=4)
         ktensor.normalize_components()
         return ktensor
+    
+    @pytest.fixture
+    def smooth_rank4_ktensor(self, rank4_kruskal_tensor):
+        A, B, C = rank4_kruskal_tensor
+        for i, prev_B in enumerate(B[1:]):
+            B[i] = prev_B + np.linalg.norm(prev_B)*np.random.standard_normal(prev_B.shape)
+        B /= np.linalg.norm(B, axis=0)
+
+        return decompositions.KruskalTensor((A, B, C))
+
+    @pytest.fixture
+    def laplacian(self, smooth_rank4_ktensor):
+        A, B, C = smooth_rank4_ktensor
+        L = np.zeros((len(B), len(B)))
+        for i, L_i in enumerate(L):
+            if i-1 >= 0:
+                L_i[i-1] = -1
+                L_i[i] += 1
+            if i+1 < len(B):
+                L_i[i+1] = -1
+                L_i[i] += 1
+        return L
 
     def test_gradient_finite_difference(self, rank4_kruskal_tensor):
         X = rank4_kruskal_tensor.construct_tensor()
         cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
         cp_opt._init_fit(
-            X=X, max_its=cp_opt.max_its, initial_decomposition=None
+            X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
         )
         flattened = base.flatten_factors(cp_opt.decomposition)
-        loss = lambda factors: cp_opt._cp_loss_scipy(factors, 4, X.shape, X)
-        derivative = lambda factors: cp_opt._cp_grad_scipy(factors, 4, X.shape, X)
+        flattened_true = base.flatten_factors(rank4_kruskal_tensor)
+        loss = cp_opt._flattened_loss
+        derivative = cp_opt._flattened_gradient
 
         assert check_grad(loss, derivative, flattened) < 1e-5
+        assert check_grad(loss, derivative, flattened_true) < 1e-5
     
     def check_decomposition(self, kruskal_tensor, *, test_closeness=True, test_fms=True, **additional_params):
 
@@ -164,3 +188,86 @@ class TestCPOPT:
 
     #def test_rank4_nonnegative_decomposition(self, nonnegative_rank4_kruskal_tensor):
     #    self.check_decomposition(nonnegative_rank4_kruskal_tensor, non_negativity_constraints=[True, True, True])
+
+    def test_weighted_rank4_decomposition(self, rank4_kruskal_tensor):
+        X = rank4_kruskal_tensor.construct_tensor()
+        mask = np.random.uniform(0, 1, X.shape) > 0.5
+
+        new_X = X.copy()
+        new_X[~mask] = np.random.uniform(0, 1, (~mask).sum())
+
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
+        estimated_ktensor = cp_opt.fit_transform(new_X, importance_weights=mask)
+
+        assert 1 - np.linalg.norm(X - estimated_ktensor.construct_tensor())/np.linalg.norm(X) > 0.999
+        assert metrics.factor_match_score(
+            rank4_kruskal_tensor.factor_matrices, estimated_ktensor.factor_matrices
+        )[0] > 1e-7
+
+
+    def test_weighted_gradient_finite_difference(self, rank4_kruskal_tensor):
+        X = rank4_kruskal_tensor.construct_tensor()
+        mask = np.random.uniform(0, 1, X.shape) > 0.5
+
+        new_X = X.copy()
+        new_X[~mask] = np.random.uniform(0, 1, (~mask).sum())
+
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
+        cp_opt._init_fit(
+            X=new_X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=mask
+        )
+        flattened = base.flatten_factors(cp_opt.decomposition)
+        flattened_true = base.flatten_factors(rank4_kruskal_tensor)
+        loss = cp_opt._flattened_loss
+        derivative = cp_opt._flattened_gradient
+
+        assert check_grad(loss, derivative, flattened) < 1e-5
+        assert check_grad(loss, derivative, flattened_true) < 1e-5
+    
+    def test_smooth_gradient_finite_difference(self, smooth_rank4_ktensor, laplacian):
+        factor_constraints = [{}, {'tikhonov_matrix': laplacian}, {}]
+
+        X = smooth_rank4_ktensor.construct_tensor()
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_constraints=factor_constraints)
+        cp_opt._init_fit(
+            X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
+        )
+        flattened = base.flatten_factors(cp_opt.decomposition)
+        flattened_true = base.flatten_factors(smooth_rank4_ktensor)
+        loss = cp_opt._flattened_loss
+        derivative = cp_opt._flattened_gradient
+
+        assert check_grad(loss, derivative, flattened) < 1e-5
+        assert check_grad(loss, derivative, flattened_true) < 1e-5
+    
+    def test_smooth_loss_different_than_unregularised(self, smooth_rank4_ktensor, laplacian):
+        factor_constraints = [{}, {'tikhonov_matrix': laplacian}, {}]
+
+        X = smooth_rank4_ktensor.construct_tensor()
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
+        cp_opt._init_fit(
+            X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
+        )
+        cp_smooth_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_constraints=factor_constraints)
+        cp_smooth_opt._init_fit(
+            X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
+        )
+
+        assert cp_opt._compute_loss(smooth_rank4_ktensor) != cp_smooth_opt._compute_loss(smooth_rank4_ktensor)
+
+    def test_smooth_gradient_different_than_unregularised(self, smooth_rank4_ktensor, laplacian):
+        factor_constraints = [{}, {'tikhonov_matrix': laplacian}, {}]
+
+        X = smooth_rank4_ktensor.construct_tensor()
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
+        cp_opt._init_fit(
+            X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
+        )
+        cp_smooth_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_constraints=factor_constraints)
+        cp_smooth_opt._init_fit(
+            X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
+        )
+
+        def b_grad(cp_opt, factors): return cp_opt._compute_gradient(factors)[1]
+
+        assert (b_grad(cp_opt, smooth_rank4_ktensor) != b_grad(cp_smooth_opt, smooth_rank4_ktensor)).all()
