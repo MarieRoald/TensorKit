@@ -9,6 +9,7 @@ from . import decompositions
 from .base_decomposer import BaseDecomposer
 from .cp import CP_ALS
 from .parafac2 import Parafac2_ALS
+from .decompositions import Parafac2Tensor
 from .utils import quadratic_form_trace
 
 
@@ -108,6 +109,7 @@ class BaseCoupledMatrices(BaseDecomposer):
         cp_als = CP_ALS(self.rank, 20, non_negativity_constraints=self.non_negativity_constraints)
         cp_als.fit(X.transpose(1, 2, 0))
         self.decomposition = self.DecompositionType.from_kruskaltensor(cp_als.decomposition)
+        self.pf2_decomposition = Parafac2Tensor.from_kruskaltensor(cp_als.decomposition)
 
     def init_components(self, initial_decomposition=None):
         if self.init.lower() == 'svd':
