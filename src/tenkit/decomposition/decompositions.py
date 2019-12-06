@@ -624,6 +624,22 @@ class Parafac2Tensor(EvolvingTensor):
 
         self.warning = warning
 
+    @classmethod
+    def from_kruskaltensor(cls, ktensor, allow_same_class=False):
+        """Generate an evolving tensor from a Kruskal tensor.
+        """
+        if allow_same_class:
+            if isinstance(ktensor, cls):
+                return ktensor
+
+        if len(ktensor.factor_matrices) != 3:
+            raise ValueError('Kruskal tensor must be third order to be converted into an evolving tensor')
+        A = ktensor.factor_matrices[0]
+        projections, R = np.linalg.qr(ktensor.factor_matrices[1])
+        C = ktensor.factor_matrices[2]
+
+
+        return cls(A, R, C, [projections]*len(C))
 
     @property
     def A(self):
