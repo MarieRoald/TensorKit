@@ -471,9 +471,10 @@ class CP_OPT(BaseCP):
         print_frequency=10,
         lower_bounds=None,
         upper_bounds=None,
-        method='cg',
+        method='l-bfgs-b',
         mask=None,
-        factor_constraints=None
+        factor_constraints=None,
+        loss_tol=1e-10,
     ):
         super().__init__(
             rank=rank,
@@ -487,9 +488,10 @@ class CP_OPT(BaseCP):
         self.print_frequency = print_frequency
         self.lower_bounds = lower_bounds
         self.upper_bounds = upper_bounds
-        self.method = 'l-bfgs-b'
+        self.method = method
 
         self.factor_constraints = factor_constraints
+        self.loss_tol = loss_tol
 
     def _init_fit(self, X, max_its, initial_decomposition, importance_weights):
         if max_its is None:
@@ -499,9 +501,9 @@ class CP_OPT(BaseCP):
         self.importance_weights = importance_weights
         
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self.options = {'maxiter':max_its, 'gtol': self.convergence_tol}
+        self.options = {'maxiter':max_its, 'gtol': self.convergence_tol, 'ftol': self.loss_tol}
 
-        self.bounds = self.create_bounds(self.lower_bounds, self.upper_bounds, X, self.rank)
+        self.bounds = self.create_bounds(self.lower_bounds, self.upper_bounds, X.shape, self.rank)
         self.initial_factors_flattened = base.flatten_factors(self.decomposition.factor_matrices)
 
     def create_bounds(self, lower_bounds, upper_bounds, sizes, rank):
@@ -517,7 +519,9 @@ class CP_OPT(BaseCP):
         lower_bounds = self._create_bounds(lower_bounds, sizes, rank)
         upper_bounds = self._create_bounds(upper_bounds, sizes, rank)
 
+
         return self._flattened_bounds(lower_bounds, upper_bounds)
+
 
     def _create_bounds(self, bounds, sizes, rank):
 
@@ -549,21 +553,36 @@ class CP_OPT(BaseCP):
             return True
 
     def _fit(self):
-        """Fit a CP model with Alternating Least Squares.
+        """Fit a CP model
         """
-        result = optimize.minimize(
-            fun=self._flattened_loss,
-            method=self.method,
+        #result = optimize.minimize(
+        #    fun=self._flattened_loss,
+        #    method=self.method,
+        #    x0=self.initial_factors_flattened,
+        #    jac=self._flattened_gradient,
+        #    bounds=self.bounds,
+        #    options=self.options,
+        #    callback=None
+        #)
+        
+        #factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
+        #self.decomposition = decompositions.KruskalTensor(factor_matrices)
+        #self.result = result
+        x, f, d = optimize.fmin_l_bfgs_b(
+            func=self._flattened_loss,
             x0=self.initial_factors_flattened,
-            jac=self._flattened_gradient,
-            bounds=self.bounds,
-            options=self.options,
-            callback=None
+            fprime=self._flattened_gradient,
+            bounds=list(zip(self.bounds.lb, self.bounds.ub)),
+            pgtol = self.options['gtol'],
+            maxiter=self.options['maxiter'],
+            factr = self.loss_tol,
+            callback=None,
+
         )
 
-        factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
+        factor_matrices = base.unflatten_factors(x, self.rank, self.X.shape)
         self.decomposition = decompositions.KruskalTensor(factor_matrices)
-        return self.decomposition, result
+        self.result = d
 
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, importance_weights=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
