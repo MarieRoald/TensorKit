@@ -246,10 +246,11 @@ class BaseParafac2(BaseDecomposer):
             C = self.decomposition.C
             blueprint_B = self.decomposition.blueprint_B
 
-            self.decomposition.projection_matrices[k][...] = base.orthogonal_solve(
+            P = base.orthogonal_solve(
                 (C[k]*A)@blueprint_B.T,
                 self.X[k]
             ).T
+            self.decomposition.projection_matrices[k][...] = P
 
             # Should_keep = diag([1, 1, ..., 1, 0, 0, ..., 0]) -> the zeros correspond to small singular values
             # Following Rasmus Bro's PARAFAC2 MATLAB script, which sets P_k = Q_k(Q_k'Q_k)^(-0.5) (line 524)
