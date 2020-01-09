@@ -349,10 +349,13 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         non_negativity_constraints=None,
         ridge_penalties=None,
         orthonormality_constraints=None,
-        signal_to_noise=-1,
         tikhonov_matrices=None,
-        coupling_strength=None,
-        normalise_tensor=True
+        coupling_strength=0.1,  # Place in dict?
+        increasing_coupling=True,  # Place in dict?
+        max_coupling=1e12,  # Place in dict?
+        coupling_increment=0.02,  # Place in dict?
+        normalise_tensor=True,  # Place in dict?
+        check_convergence_frequency = 10,  # Place in dict?
     ):
         super().__init__(
             rank=rank,
@@ -369,9 +372,13 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             orthonormality_constraints=orthonormality_constraints,
             tikhonov_matrices=tikhonov_matrices,
         )
-        self.signal_to_noise = signal_to_noise
+        self.increasing_coupling = increasing_coupling
+        self.coupling_increment = coupling_increment
+        self.max_coupling = max_coupling
+        self.coupling_increment = coupling_increment
         self._coupling_strength = coupling_strength
         self.normalise_tensor = normalise_tensor
+        self.check_convergence_frequency = check_convergence_frequency
 
     def _get_rightsolve(self, mode, k=None):
         rightsolve = CP_ALS._get_rightsolve(self, mode)
@@ -414,10 +421,13 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             if abs(self._rel_function_change) < self.convergence_tol:
                 break
 
-            self._update_parafac2_factor_matrices()
+            for _ in range(5):
+                self._update_parafac2_factor_matrices()
             self._update_coupled_matrices_factor_matrices()
             self._update_coupling_penalty(it)
-            self._update_convergence()
+
+            if self.current_iteration % self.check_convergence_frequency == 0:
+                self._update_convergence()
 
             if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{self.current_iteration:6d}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
@@ -447,14 +457,19 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
             initial decomposition. If class's init is not 'precomputed' it is ignored.
         """
         self.pf2_decomposition = None
+
         if self.normalise_tensor:
             X_norm = np.linalg.norm(np.array(X))
             for X_k in X:
-                pass
                 X_k[...] /= X_norm
         
-        super()._init_fit(X, max_its=max_its, initial_decomposition=initial_decomposition)
-        
+        BaseDecomposer._init_fit(self, X, max_its=max_its, initial_decomposition=initial_decomposition)
+
+        if self.pf2_decomposition is None:
+            B = np.random.rand(self.rank, self.rank)
+            P = [np.eye(*B_k.shape) for B_k in self.decomposition.B]
+            self.pf2_decomposition = decompositions.Parafac2Tensor(A=self.decomposition.A, blueprint_B=B, projection_matrices=P, C=self.decomposition.C) 
+
         if self.non_negativity_constraints is None:
             self.non_negativity_constraints = [False]*3
         if self.orthonormality_constraints is None:
@@ -468,11 +483,6 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         self.prev_loss = self.loss
 
         self.coupling_penalties = self._init_coupled_penalties()
-
-        if self.pf2_decomposition is None:
-            B = np.random.rand(self.rank, self.rank)
-            P = [np.eye(*B_k.shape) for B_k in self.decomposition.B]
-            self.pf2_decomposition = decompositions.Parafac2Tensor(A=self.decomposition.A, blueprint_B=B, projection_matrices=P, C=self.decomposition.C) 
 
     def _init_coupled_penalties(self):
         self.coupled_penalties = np.empty((self.decomposition.shape[-1]))
@@ -489,21 +499,20 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         if self._coupling_strength is not None:
             self.coupling_penalties[:] = self._coupling_strength
             return
+
         if it == 0:
-            scale = 10**(-self.signal_to_noise/10)
             estimated_X = self.decomposition.construct_slices()
 
             for k, (X_slice, estimated_X_slice) in enumerate(zip(self.X, estimated_X)):
                 SSE = np.linalg.norm(X_slice - estimated_X_slice)**2
                 coupling_error = np.linalg.norm(self.decomposition.B[k] - self.pf2_decomposition.B[k])**2
 
-                self.coupling_penalties[k] = scale*SSE/coupling_error
+                self.coupling_penalties[k] = self._coupling_strength*SSE/coupling_error
 
         else:
             for k, coupling_penalty in enumerate(self.coupling_penalties):
-                self.coupling_penalties[k] = min(10, coupling_penalty*1.02)
+                self.coupling_penalties[k] = min(self.max_coupling, coupling_penalty*(1+self.coupling_increment))
 
-    
     @property
     def parafac2_error(self):
         return utils.slice_SSE(self.X, self.pf2_decomposition.construct_slices())
@@ -516,7 +525,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         for k, B in enumerate(self.decomposition.B):
             ce += np.linalg.norm(B - self.pf2_decomposition.B[k])**2
 
-        return ce/(self.rank*num_timesteps)
+        return ce  # /(self.rank*num_timesteps)
 
     def store_checkpoint(self):
         super().store_checkpoint()
@@ -546,3 +555,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
 
         self._check_valid_components(pf2_decomposition)
         self.pf2_decomposition = pf2_decomposition
+
+    @property
+    def loss(self):
+        return self.SSE + self.coupling_error
