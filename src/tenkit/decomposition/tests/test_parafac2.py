@@ -39,7 +39,7 @@ class TestParafac2ALS:
 
     def test_rank4_non_negative_decomposition(self, rank4_parafac2_tensor):
         X = (rank4_parafac2_tensor.construct_tensor())
-        parafac2_als = parafac2.Parafac2_ALS(4, non_negativity_constraints=[False, True, True], max_its=1000, convergence_tol=1e-10, print_frequency=1000)
+        parafac2_als = parafac2.Parafac2_ALS(4, non_negativity_constraints=[False, False, True], max_its=1000, convergence_tol=1e-10, print_frequency=1000)
         for constraint in itertools.product([True, False], repeat=3):
             parafac2_als.non_negativity_constraints = constraint
             estimated_pf2tensor = parafac2_als.fit_transform(X)
