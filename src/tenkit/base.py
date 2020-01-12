@@ -43,7 +43,6 @@ def orthogonal_solve(A, B):
     U, S, Vh = np.linalg.svd(B.T@A, full_matrices=False)
     S_tol = max(U.shape) * S[0] * (1e-16)
     should_keep = (S > S_tol).astype(float)
-
     return (Vh.T * should_keep)@ U.T
 
 
