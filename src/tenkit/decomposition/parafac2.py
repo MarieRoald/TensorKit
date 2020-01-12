@@ -12,6 +12,18 @@ from .base_decomposer import BaseDecomposer
 __all__ = ['Parafac2_ALS']
 
 
+
+def compute_projected_X(projection_matrices, X):
+    rank = projection_matrices[0].shape[1]
+    I = X[0].shape[0]
+    K = len(X)
+    projected_X = np.empty(shape=(I, rank, K))
+
+    for k, projection_matrix in enumerate(projection_matrices):
+        projected_X[..., k] = X[k]@projection_matrix
+    return projected_X
+
+
 class BaseParafac2(BaseDecomposer):
     r"""Base class for Parafac2 decomposer objects
 
@@ -212,9 +224,6 @@ class BaseParafac2(BaseDecomposer):
     def loss(self):
         return self.SSE
 
-    def _fit(self):
-        return 1 - self.SSE/(self.X_norm**2)
-
     @property
     def SSE(self):
         return utils.slice_SSE(self.X, self.reconstructed_X)
@@ -226,16 +235,17 @@ class BaseParafac2(BaseDecomposer):
     @property
     def reconstructed_X(self):
         return self.decomposition.construct_slices()
-    
+
     @property
     def projected_X(self):
-        I = self.decomposition.A.shape[0]
-        K = self.decomposition.C.shape[0]
-        projected_X = np.empty((I, self.rank, K))
+        #I = self.decomposition.A.shape[0]
+        #K = self.decomposition.C.shape[0]
+        #projected_X = np.empty((I, self.rank, K))
 
-        for k, projection_matrix in enumerate(self.decomposition.projection_matrices):
-            projected_X[..., k] = self.X[k]@projection_matrix
-        return projected_X
+        #for k, projection_matrix in enumerate(self.decomposition.projection_matrices):
+        #    projected_X[..., k] = self.X[k]@projection_matrix
+        #return projected_X
+        return compute_projected_X(self.decomposition.projection_matrices, self.X)
 
     # TODO: Change name of this function
     def _update_projection_matrices(self):
@@ -390,7 +400,6 @@ class Parafac2_ALS(BaseParafac2):
         self.cp_decomposer._init_fit(X=self.projected_X, max_its=np.inf, initial_decomposition=self.cp_decomposition)
 
     def _fit(self):
-
         self._prepare_cp_decomposer()
         for it in range(self.max_its - self.current_iteration):
             if abs(self._rel_function_change) < self.convergence_tol:
