@@ -15,7 +15,7 @@ class TestFlexibleParafac2ALS:
    def test_flexible_parfac2_als(self):
        decomp = decompositions.Parafac2Tensor.random_init([40, 50, 20], 5)
        x = decomp.construct_slices()
-       fp_als = fc.FlexibleParafac2_ALS(5, max_its=100, signal_to_noise=10, init='cp')
+       fp_als = fc.FlexibleParafac2_ALS(5, max_its=100, coupling_strength=0.001, init='random')
        fp_als.fit(x)   
        assert fp_als.explained_variance > 1-1e-3
 
@@ -23,6 +23,6 @@ class TestFlexibleParafac2ALS:
        decomp = decompositions.Parafac2Tensor.random_init([40, 50, 20], 5)
        x = decomp.construct_slices()
        x = np.maximum(x, 0)
-       fp_als = fc.FlexibleParafac2_ALS(5, max_its=100, signal_to_noise=10, init='cp', non_negativity_constraints=[True, True, True])
+       fp_als = fc.FlexibleParafac2_ALS(5, max_its=100, coupling_strength=0.00001, init='random', non_negativity_constraints=[True, True, True])
        fp_als.fit(x)   
        assert fp_als.explained_variance > 1-1e-3
