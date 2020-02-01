@@ -182,10 +182,12 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self.max_it = max_it
         self.non_negativity = non_negativity
         self.verbose = verbose
+        self._qr_cache = None
     
     def update_decomposition(
         self, X, decomposition, projected_X=None, should_update_projections=True
     ):
+        self._qr_cache = None
         # Init constraint by projecting the decomposition
         aux_fms = self.init_constraint(decomposition.projection_matrices, decomposition.blueprint_B)
         dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
@@ -204,13 +206,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
             #if :
             #    pass
-                #break
-        # Loop
-            # If update projections, update them
-            # Update blueprint
-            # Update constraint (aux_fm)
-            # update dual (uk)
-        
+                #break        
 
     def init_constraint(self, init_P, init_B):
         B = [P_k@init_B for P_k in init_P]
@@ -257,9 +253,17 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
     def update_blueprint(self, X, decomposition, aux_fms, dual_variables, projected_X):
         # Square equation from notes
-        lhs = base.khatri_rao(
-            decomposition.A, decomposition.C,
-        )
+        # TODO: Cache QR factorisation of [lhs.T, reg_lhs.T].T
+        if self._qr_cache is None:
+            lhs = base.khatri_rao(
+                decomposition.A, decomposition.C,
+            )
+            reg_lhs = np.vstack([np.identity(decomposition.rank) for _ in aux_fms])
+            reg_lhs *= np.sqrt(self.rho/2)
+            lhs = np.vstack([lhs, reg_lhs])
+            self._qr_cache = np.linalg.qr(lhs)
+        Q, R = self._qr_cache
+        
         rhs = base.unfold(projected_X, 1).T
         projected_aux = [
             (aux_fm - dual_variable).T@projection
@@ -268,8 +272,11 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             )
         ]
         reg_rhs = np.vstack(projected_aux)
-        reg_lhs = np.vstack([np.identity(decomposition.rank) for _ in projected_aux])
-        decomposition.blueprint_B[:] = prox_reg_lstsq(lhs, rhs, self.rho, reg_lhs, reg_rhs).T
+        reg_rhs *= np.sqrt(self.rho/2)
+        rhs = np.vstack([rhs, reg_rhs])
+        
+        decomposition.blueprint_B[:] = np.linalg.solve(R, Q.T@rhs).T
+        #decomposition.blueprint_B[:] = prox_reg_lstsq(lhs, rhs, self.rho, reg_lhs, reg_rhs).T
     
     def compute_projected_X(self, projection_matrices, X, out=None):
         return compute_projected_X(projection_matrices, X, out=out)
