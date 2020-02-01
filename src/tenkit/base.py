@@ -22,7 +22,7 @@ def non_negative_rightsolve(A, B):
     """
     # Discussion tracking in Enron Email Using PARAFAC has non negative updates
     if len(B.shape) == 1:
-        B = B[np.newaxis, B]
+        B = B[np.newaxis, :]
 
     x = np.zeros((B.shape[0], A.shape[0]))
     for i, b_i in enumerate(B):
