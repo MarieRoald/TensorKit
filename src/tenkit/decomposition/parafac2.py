@@ -13,15 +13,16 @@ __all__ = ['Parafac2_ALS']
 
 
 
-def compute_projected_X(projection_matrices, X):
+def compute_projected_X(projection_matrices, X, out=None):
     rank = projection_matrices[0].shape[1]
     I = X[0].shape[0]
     K = len(X)
-    projected_X = np.empty(shape=(I, rank, K))
+    if out is None:
+        out = np.empty(shape=(I, rank, K))
 
     for k, projection_matrix in enumerate(projection_matrices):
-        projected_X[..., k] = X[k]@projection_matrix
-    return projected_X
+        out[..., k] = X[k]@projection_matrix
+    return out
 
 
 class BaseParafac2(BaseDecomposer):
