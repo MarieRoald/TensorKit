@@ -1,49 +1,125 @@
 from copy import copy
 from pathlib import Path
-
 import h5py
 import numpy as np
 
 from .. import base
 from .cp import get_sse_lhs
-from .parafac2 import BaseParafac2, compute_projected_X
+from .parafac2 import BaseParafac2, compute_projected_X, Parafac2_ALS
 from .decompositions import KruskalTensor, Parafac2Tensor
 from .base_decomposer import BaseDecomposer
 from . import decompositions
+from .. import utils
 
 
 class BaseSubProblem:
     def __init__(self):
         pass
 
-    def minimise(self, X, decomposition) -> np.ndarray:
+    def update_decomposition(self, X, decomposition):
         pass
 
     def regulariser(self, factor) -> float:
-        pass
+        return 0
 
 
 class RLS(BaseSubProblem):
-    def __init__(self, mode, ridge_penalty=0):
+    def __init__(self, mode, ridge_penalty=0, non_negativity=False):
         self.ridge_penalty = ridge_penalty
+        self.non_negativity = non_negativity
         self.mode = mode
         self._matrix_khatri_rao_product_cache = None
     
-    def minimise(self, X, decomposition):
+    def update_decomposition(self, X, decomposition):
         lhs = get_sse_lhs(decomposition.factor_matrices, self.mode)
         rhs = base.matrix_khatri_rao_product(X, decomposition.factor_matrices, self.mode)
 
         self._matrix_khatri_rao_product_cache = rhs
 
         rightsolve = self._get_rightsolve()
-        return rightsolve(lhs, rhs)
+
+        decomposition.factor_matrices[self.mode][:] = rightsolve(lhs, rhs)
     
     def _get_rightsolve(self):
         rightsolve = base.rightsolve
+        if self.non_negativity:
+            rightsolve = base.non_negative_rightsolve
         if self.ridge_penalty:
             rightsolve = base.add_rightsolve_ridge(rightsolve, self.ridge_penalty)
         return rightsolve
+
+
+def prox_reg_lstsq(A, B, reg, C, D):
+    """Solve ||AX - B||^2 + r||CX - D||^2
+    """
+    # We can save much time here by storing a QR decomposition of A_new.
+    reg = np.sqrt(reg/2)
+    A_new = np.concatenate([A, reg*C], axis=0)
+    B_new = np.concatenate([B, reg*D], axis=0)
+    return np.linalg.lstsq(A_new, B_new)[0]
+
+
+class ADMMSubproblem(BaseSubProblem):
+    def __init__(self, mode, rho, tol=1e-3, max_it=50, non_negativity=True):
+        self.non_negativity = non_negativity
+        self.rho = rho
+        self.mode = mode
+        self.tol = tol
+        self.max_it = max_it
+
     
+    def update_decomposition(self, X, decomposition):
+        # TODO: Cache QR decomposition of lhs.T
+        # ||MA - X||
+        # M = lhs
+        # X = rhs
+        lhs = base.khatri_rao(
+            *decomposition.factor_matrices, skip=self.mode
+        ).T
+        rhs = base.unfold(X, self.mode)
+
+        # Assign name to current factor matrix to and identity reduce space
+        fm = decomposition.factor_matrices[self.mode]
+        I = np.identity(fm.shape[1])
+        
+        # Initialise main variable by unregularised least squares,
+        # auxiliary variable by projecting main variable init
+        # and the dual variable as zeros
+        fm[:] = np.linalg.lstsq(lhs.T, rhs.T)[0].T
+        aux_fm = self.init_aux_factor_matrix(decomposition)
+        dual_variable = np.zeros_like(fm)
+
+        # Update decomposition and auxiliary variable with proximal
+        # map calls followed by a gradient ascent step for the dual
+        # variable. Stop if main and aux variable are close enough
+        for _ in range(self.max_it):
+            if self.has_converged(fm, aux_fm):
+                break
+            fm[:] = prox_reg_lstsq(lhs.T, rhs.T, self.rho/2, I, aux_fm.T - dual_variable.T).T
+            self.update_constraint(decomposition, aux_fm, dual_variable)
+
+            dual_variable += fm - aux_fm
+        
+        # Use aux variable for hard constraints
+        decomposition.factor_matrices[self.mode][:] = aux_fm
+    
+    def init_aux_factor_matrix(self, decomposition):
+        """Initialise the auxiliary factor matrix used to fit the constraints.
+        """
+        return np.maximum(decomposition.factor_matrices[self.mode], 0)
+    
+    def update_constraint(self, decomposition, aux_fm, dual_variable):
+        """Update the auxiliary factor matrix used to fit the constraints inplace.
+        """
+        np.maximum(
+            decomposition.factor_matrices[self.mode] + dual_variable,
+            0,
+            out=aux_fm
+        )
+    
+    def has_converged(self, fm, aux_fm):
+        return np.linalg.norm(fm - aux_fm) < self.tol
+
 
 class BaseParafac2SubProblem(BaseSubProblem):
     _is_pf2_evolving_mode = True
@@ -57,24 +133,165 @@ class BaseParafac2SubProblem(BaseSubProblem):
 
 class Parafac2RLS(BaseParafac2SubProblem):
     def __init__(self, ridge_penalty=0):
-        self.ridge_penalty=ridge_penalty
+        self.ridge_penalty = ridge_penalty
+        self.non_negativity = False
 
-    def compute_projected_X(self, X, decomposition):
-        return compute_projected_X(X, decomposition.projection_matrices)
+    def compute_projected_X(self, projection_matrices, X, out=None):
+        return compute_projected_X(projection_matrices, X, out=out)
 
-    def minimise(self, X, decomposition, projected_X=None, should_update_projections=True):
+    def update_projections(self, X, decomposition):
+        K = len(X)
+
+        for k in range(K):
+            A = decomposition.A
+            C = decomposition.C
+            blueprint_B = decomposition.blueprint_B
+
+            decomposition.projection_matrices[k][:] = base.orthogonal_solve(
+                (C[k]*A)@blueprint_B.T,
+                X[k]
+            ).T
+
+    def update_decomposition(
+        self, X, decomposition, projected_X=None, should_update_projections=True
+    ):
+        """Updates the decomposition inplace
+
+        If a projected data tensor is supplied, then it is updated inplace
+        """
         if should_update_projections:
-            projections = compute_projections(X, decomposition.projection_matrices)
-            projected_X = self.compute_projected_X(X, projections)
+            self.update_projections(X, decomposition)
+            projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
         
         if projected_X is None:
-            projected_X = self.compute_projected_X(X, decomposition)
-        blueprint_B = RLS.minimise(projected_X, decomposition)
-    
+            projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
+        ktensor = KruskalTensor([decomposition.A, decomposition.blueprint_B, decomposition.C])
+        RLS.update_decomposition(self, X=projected_X, decomposition=ktensor)
+
     def _get_rightsolve(self):
         return RLS._get_rightsolve(self)
-    
 
+
+class Parafac2ADMM(BaseParafac2SubProblem):
+    # In our notes: U -> dual variable
+    #               \tilde{B} -> aux_fms
+    #               B -> decomposition
+    def __init__(self, rho, tol=1e-3, max_it=50, non_negativity=False, verbose=False):
+        self.rho = rho
+        self.tol = tol
+        self.max_it = max_it
+        self.non_negativity = non_negativity
+        self.verbose = verbose
+    
+    def update_decomposition(
+        self, X, decomposition, projected_X=None, should_update_projections=True
+    ):
+        # Init constraint by projecting the decomposition
+        aux_fms = self.init_constraint(decomposition.projection_matrices, decomposition.blueprint_B)
+        dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
+        for i in range(self.max_it):
+            if should_update_projections:
+                self.update_projections(X, decomposition, aux_fms, dual_variables)
+                projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
+            
+            if projected_X is None:
+                projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
+
+            self.update_blueprint(X, decomposition, aux_fms, dual_variables, projected_X)
+            self.has_converged(decomposition, aux_fms)
+            self.update_constraint(decomposition, aux_fms, dual_variables)
+            self.update_dual(decomposition, aux_fms, dual_variables)
+
+            #if :
+            #    pass
+                #break
+        # Loop
+            # If update projections, update them
+            # Update blueprint
+            # Update constraint (aux_fm)
+            # update dual (uk)
+        
+
+    def init_constraint(self, init_P, init_B):
+        B = [P_k@init_B for P_k in init_P]
+        if self.non_negativity:
+            return [np.maximum(B_k, 0, out=B_k) for B_k in B]
+        else:
+            return B
+
+    def update_constraint(self, decomposition, aux_fms, dual_variables):
+        projections = decomposition.projection_matrices
+        blueprint_B = decomposition.blueprint_B
+        aux_fms = [
+            self.prox_update(
+                P_k@blueprint_B + dual_variables[k], out=aux_fm
+            ) for k, (P_k, aux_fm) in enumerate(zip(projections, aux_fms))
+        ]
+    
+    def prox_update(self, x, out):
+        if not self.non_negativity:
+            out[:] = x
+        else:
+            np.maximum(x, 0, out=out)
+
+    def update_dual(self, decomposition, aux_fms, dual_variables):
+        for P_k, aux_fm, dual_variable in zip(decomposition.projection_matrices, aux_fms, dual_variables):
+            B_k = P_k@decomposition.blueprint_B
+            dual_variable -= B_k - aux_fm
+
+    def update_projections(self, X, decomposition, aux_fms, dual_variable):
+        # Triangle equation from notes
+        A = decomposition.A
+        blueprint_B = decomposition.blueprint_B
+        C = decomposition.C
+        for k, X_k in enumerate(X):
+            unreg_lhs = (A*C[k])@(blueprint_B.T)
+            reg_lhs = np.sqrt(self.rho/2)*(blueprint_B.T)
+            lhs = np.vstack((unreg_lhs, reg_lhs))
+
+            unreg_rhs = X_k
+            reg_rhs = np.sqrt(self.rho/2)*(aux_fms[k] - dual_variable[k]).T
+            rhs = np.vstack((unreg_rhs, reg_rhs))
+            
+            decomposition.projection_matrices[k][:] = base.orthogonal_solve(lhs, rhs).T
+
+    def update_blueprint(self, X, decomposition, aux_fms, dual_variables, projected_X):
+        # Square equation from notes
+        lhs = base.khatri_rao(
+            decomposition.A, decomposition.C,
+        )
+        rhs = base.unfold(projected_X, 1).T
+        projected_aux = [
+            (aux_fm - dual_variable).T@projection
+            for aux_fm, dual_variable, projection in zip(
+                aux_fms, dual_variables, decomposition.projection_matrices
+            )
+        ]
+        reg_rhs = np.vstack(projected_aux)
+        reg_lhs = np.vstack([np.identity(decomposition.rank) for _ in projected_aux])
+        decomposition.blueprint_B[:] = prox_reg_lstsq(lhs, rhs, self.rho, reg_lhs, reg_rhs).T
+    
+    def compute_projected_X(self, projection_matrices, X, out=None):
+        return compute_projected_X(projection_matrices, X, out=out)
+
+    def _duality_gap(self, fms, aux_fms):
+        return sum(np.linalg.norm(fm - aux_fm)**2 for fm, aux_fm in zip(fms, aux_fms))
+
+    def has_converged(self, decomposition, aux_fms):
+        fms = [P@decomposition.blueprint_B for P in decomposition.projection_matrices]
+        e = self._duality_gap(fms, aux_fms)
+        if self.verbose:
+            print(e)
+        return e < self.tol
+        
+
+
+class FlexibleParafac2ADMM(BaseParafac2SubProblem):
+    def __init__(self, non_negativity=True):
+        self.non_negativity = non_negativity
+
+    def update_decomposition(self,  X, decomposition, projected_X, update_projections):
+        pass
 
 class BlockParafac2(BaseDecomposer):
     DecompositionType = decompositions.Parafac2Tensor
@@ -91,7 +308,10 @@ class BlockParafac2(BaseDecomposer):
         print_frequency=None,
         projection_update_frequency=5,
     ):
-        if not hasattr(sub_problems[1], '_is_pf2_evolving_mode') or not sub_problems[1]._is_pf2:
+        if (
+            not hasattr(sub_problems[1], '_is_pf2_evolving_mode') or 
+            not sub_problems[1]._is_pf2_evolving_mode
+        ):
             raise ValueError(
                 'Second sub problem must follow PARAFAC2 constraints. If it does, '
                 'ensure that `sub_problem._is_pf2 == True`.'
@@ -113,6 +333,7 @@ class BlockParafac2(BaseDecomposer):
     def _check_valid_components(self, decomposition):
         return BaseParafac2._check_valid_components(self, decomposition)
 
+    @property
     def loss(self):
         factor_matrices = [
             self.decomposition.A,
@@ -125,23 +346,21 @@ class BlockParafac2(BaseDecomposer):
         )
 
     def _update_parafac2_factors(self):
-        should_update_projections = self.current_iteration % self.projection_update_frequency
-        out = self.sub_problems[1].minimise(
-            self.X, self.decomposition, should_update_projections=should_update_projections
+        should_update_projections = self.current_iteration % self.projection_update_frequency == 0
+        # The function below updates the decomposition and the projected X inplace.
+        #print(f'{self.current_iteration:6d}A: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+        #              f'improvement is {self._rel_function_change:g}')
+        self.sub_problems[1].update_decomposition(
+            self.X, self.decomposition, self.projected_X, should_update_projections=should_update_projections
         )
-        next_P = out[0]
-        self.decomposition.B[:] = out[1]
-        P_update_status = out[2]
-        self.projected_X = out[3]
-
-        if P_update_status:
-            for P, new_P in zip(self.decomposition.projection_matrices, next_P):
-                P[:] = new_P
-        
-        self.decomposition.A[:] = self.sub_problems[0].minimise(
+        #print(f'{self.current_iteration:6d}B: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+        #              f'improvement is {self._rel_function_change:g}')
+        self.sub_problems[0].update_decomposition(
             self.projected_X, self.cp_decomposition
         )
-        self.decomposition.C[:] = self.sub_problems[2].minimise(
+        #print(f'{self.current_iteration:6d}C: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+        #              f'improvement is {self._rel_function_change:g}')
+        self.sub_problems[2].update_decomposition(
             self.projected_X, self.cp_decomposition
         )
 
@@ -151,6 +370,7 @@ class BlockParafac2(BaseDecomposer):
                 break
 
             self._update_parafac2_factors()
+            self._update_convergence()
 
             if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{self.current_iteration:6d}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
@@ -167,9 +387,18 @@ class BlockParafac2(BaseDecomposer):
 
     def init_components(self, initial_decomposition=None):
         BaseParafac2.init_components(self, initial_decomposition=initial_decomposition)
+
+    def _update_convergence(self):
+        return Parafac2_ALS._update_convergence(self)
+
+    def _init_fit(self, X, max_its, initial_decomposition):
+        super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.cp_decomposition = KruskalTensor(
-            (self.decomposition.A, self.decomposition.blueprint_B, self.decomposition.C)
+            [self.decomposition.A, self.decomposition.blueprint_B, self.decomposition.C]
         )
+        self.projected_X = compute_projected_X(self.decomposition.projection_matrices, self.X)
+        self.prev_loss = self.loss
+        self._rel_function_change = np.inf
     
     def init_random(self):
         return BaseParafac2.init_random(self)
@@ -180,8 +409,17 @@ class BlockParafac2(BaseDecomposer):
     def init_cp(self):
         return BaseParafac2.init_cp(self)
 
+    @property
     def reconstructed_X(self):
-        self.decomposition.construct_slices()
+        return self.decomposition.construct_slices()
     
     def set_target(self, X):
         BaseParafac2.set_target(self, X)
+
+    @property
+    def SSE(self):
+        return utils.slice_SSE(self.X, self.reconstructed_X)
+
+    @property
+    def MSE(self):
+        return self.SSE/self.decomposition.num_elements
