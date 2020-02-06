@@ -177,6 +177,11 @@ class Parafac2ADMM(BaseParafac2SubProblem):
     #               \tilde{B} -> aux_fms
     #               B -> decomposition
     def __init__(self, rho, tol=1e-3, max_it=50, non_negativity=False, verbose=False):
+        if rho is None:
+            self.auto_rho = True
+        else:
+            self.auto_rho = False
+
         self.rho = rho
         self.tol = tol
         self.max_it = max_it
@@ -188,6 +193,8 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self, X, decomposition, projected_X=None, should_update_projections=True
     ):
         self._qr_cache = None
+        if self.auto_rho:
+            self.rho, self._qr_cache = self.compute_auto_rho(decomposition)
         # Init constraint by projecting the decomposition
         aux_fms = self.init_constraint(decomposition.projection_matrices, decomposition.blueprint_B)
         dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
@@ -204,9 +211,17 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             self.update_constraint(decomposition, aux_fms, dual_variables)
             self.update_dual(decomposition, aux_fms, dual_variables)
 
-            #if :
-            #    pass
-                #break        
+    def compute_auto_rho(self, decomposition):     
+        lhs = base.khatri_rao(
+            decomposition.A, decomposition.C,
+        )
+        rho = np.linalg.norm(lhs)**2/decomposition.rank
+
+        reg_lhs = np.vstack([np.identity(decomposition.rank) for _ in decomposition.B])
+        reg_lhs *= np.sqrt(rho/2)
+        lhs = np.vstack([lhs, reg_lhs])
+
+        return rho, np.linalg.qr(lhs)
 
     def init_constraint(self, init_P, init_B):
         B = [P_k@init_B for P_k in init_P]
@@ -253,7 +268,6 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
     def update_blueprint(self, X, decomposition, aux_fms, dual_variables, projected_X):
         # Square equation from notes
-        # TODO: Cache QR factorisation of [lhs.T, reg_lhs.T].T
         if self._qr_cache is None:
             lhs = base.khatri_rao(
                 decomposition.A, decomposition.C,
@@ -274,7 +288,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         reg_rhs = np.vstack(projected_aux)
         reg_rhs *= np.sqrt(self.rho/2)
         rhs = np.vstack([rhs, reg_rhs])
-        
+
         decomposition.blueprint_B[:] = np.linalg.solve(R, Q.T@rhs).T
         #decomposition.blueprint_B[:] = prox_reg_lstsq(lhs, rhs, self.rho, reg_lhs, reg_rhs).T
     
