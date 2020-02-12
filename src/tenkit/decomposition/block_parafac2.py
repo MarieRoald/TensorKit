@@ -207,9 +207,11 @@ class Parafac2ADMM(BaseParafac2SubProblem):
                 projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
 
             self.update_blueprint(X, decomposition, aux_fms, dual_variables, projected_X)
-            self.has_converged(decomposition, aux_fms)
-            self.update_constraint(decomposition, aux_fms, dual_variables)
+            old_aux_fms = aux_fms
+            aux_fms = self.compute_next_aux_fms(decomposition, dual_variables)
             self.update_dual(decomposition, aux_fms, dual_variables)
+            if self.has_converged(decomposition, aux_fms, old_aux_fms, dual_variables):
+                break
 
     def compute_auto_rho(self, decomposition):     
         lhs = base.khatri_rao(
@@ -230,25 +232,25 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         else:
             return B
 
-    def update_constraint(self, decomposition, aux_fms, dual_variables):
+    def compute_next_aux_fms(self, decomposition, dual_variables):
         projections = decomposition.projection_matrices
         blueprint_B = decomposition.blueprint_B
-        aux_fms = [
-            self.prox_update(
-                P_k@blueprint_B + dual_variables[k], out=aux_fm
-            ) for k, (P_k, aux_fm) in enumerate(zip(projections, aux_fms))
+        return [
+            self.constraint_prox(
+                P_k@blueprint_B + dual_variables[k]
+            ) for k, P_k in enumerate(projections)
         ]
     
-    def prox_update(self, x, out):
+    def constraint_prox(self, x):
         if not self.non_negativity:
-            out[:] = x
+            return x
         else:
-            np.maximum(x, 0, out=out)
+            return np.maximum(x, 0)
 
     def update_dual(self, decomposition, aux_fms, dual_variables):
         for P_k, aux_fm, dual_variable in zip(decomposition.projection_matrices, aux_fms, dual_variables):
             B_k = P_k@decomposition.blueprint_B
-            dual_variable -= B_k - aux_fm
+            dual_variable += B_k - aux_fm  # TODO: Look at this one a bit more
 
     def update_projections(self, X, decomposition, aux_fms, dual_variable):
         # Triangle equation from notes
@@ -295,15 +297,22 @@ class Parafac2ADMM(BaseParafac2SubProblem):
     def compute_projected_X(self, projection_matrices, X, out=None):
         return compute_projected_X(projection_matrices, X, out=out)
 
-    def _duality_gap(self, fms, aux_fms):
-        return sum(np.linalg.norm(fm - aux_fm)**2 for fm, aux_fm in zip(fms, aux_fms))
+    def _compute_relative_duality_gap(self, fms, aux_fms):
+        gap_sq = sum(np.linalg.norm(fm - aux_fm)**2 for fm, aux_fm in zip(fms, aux_fms))
+        aux_norm_sq = sum(np.linalg.norm(aux_fm)**2 for aux_fm in aux_fms)
+        return gap_sq/aux_norm_sq
 
-    def has_converged(self, decomposition, aux_fms):
-        fms = [P@decomposition.blueprint_B for P in decomposition.projection_matrices]
-        e = self._duality_gap(fms, aux_fms)
+    def has_converged(self, decomposition, aux_fms, old_aux_fms, dual_variables):
+        duality_gap = self._compute_relative_duality_gap(decomposition.B, aux_fms)
+        aux_change_sq = sum(
+            np.linalg.norm(aux_fm - old_aux_fm)**2 for aux_fm, old_aux_fm in zip(aux_fms, old_aux_fms)
+        )
+        dual_var_norm_sq = sum(np.linalg.norm(dual_var)**2 for dual_var in dual_variables)
         if self.verbose:
-            print(e)
-        return e < self.tol
+            print("primal criteria", duality_gap, "dual criteria", aux_change)
+
+        
+        return duality_gap < self.tol and aux_change_sq/dual_var_norm_sq < self.tol
         
 
 
@@ -371,6 +380,7 @@ class BlockParafac2(BaseDecomposer):
         # The function below updates the decomposition and the projected X inplace.
         #print(f'{self.current_iteration:6d}A: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
         #              f'improvement is {self._rel_function_change:g}')
+        decomposition = self.decomposition
         self.sub_problems[1].update_decomposition(
             self.X, self.decomposition, self.projected_X, should_update_projections=should_update_projections
         )
