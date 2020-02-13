@@ -308,11 +308,12 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             np.linalg.norm(aux_fm - old_aux_fm)**2 for aux_fm, old_aux_fm in zip(aux_fms, old_aux_fms)
         )
         dual_var_norm_sq = sum(np.linalg.norm(dual_var)**2 for dual_var in dual_variables)
+        aux_change_criterion = (aux_change_sq + 1e-16) / (dual_var_norm_sq + 1e-16)
         if self.verbose:
             print("primal criteria", duality_gap, "dual criteria", aux_change)
 
         
-        return duality_gap < self.tol and aux_change_sq/dual_var_norm_sq < self.tol
+        return duality_gap < self.tol and aux_change_criterion < self.tol
         
 
 
