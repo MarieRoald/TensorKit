@@ -316,7 +316,6 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         return duality_gap < self.tol and aux_change_criterion < self.tol
         
 
-
 class FlexibleParafac2ADMM(BaseParafac2SubProblem):
     def __init__(self, non_negativity=True):
         self.non_negativity = non_negativity
@@ -338,6 +337,7 @@ class BlockParafac2(BaseDecomposer):
         checkpoint_path=None,
         print_frequency=None,
         projection_update_frequency=5,
+        convergence_check_frequency=1,
     ):
         if (
             not hasattr(sub_problems[1], '_is_pf2_evolving_mode') or 
@@ -360,6 +360,7 @@ class BlockParafac2(BaseDecomposer):
         self.sub_problems = sub_problems
         self.init = init
         self.projection_update_frequency = projection_update_frequency
+        self.convergence_check_frequency = convergence_check_frequency
 
     def _check_valid_components(self, decomposition):
         return BaseParafac2._check_valid_components(self, decomposition)
@@ -398,11 +399,10 @@ class BlockParafac2(BaseDecomposer):
 
     def _fit(self):
         for it in range(self.max_its - self.current_iteration):
-            if self._rel_function_change < self.convergence_tol:
+            if self._has_converged():
                 break
 
             self._update_parafac2_factors()
-            self._update_convergence()
 
             if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
                 print(f'{self.current_iteration:6d}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
@@ -420,8 +420,15 @@ class BlockParafac2(BaseDecomposer):
     def init_components(self, initial_decomposition=None):
         BaseParafac2.init_components(self, initial_decomposition=initial_decomposition)
 
-    def _update_convergence(self):
-        return Parafac2_ALS._update_convergence(self)
+    def _has_converged(self):
+        has_converged = False
+        if self.current_iteration % self.convergence_check_frequency == 0 and self.current_iteration > 0:
+            loss = self.loss
+            tol = (1 - self.convergence_tol)**self.convergence_check_frequency
+            has_converged = loss >= tol*self.prev_loss
+            self._rel_function_change = (self.prev_loss - loss)/self.prev_loss
+            self.prev_loss = loss
+        return has_converged
 
     def _init_fit(self, X, max_its, initial_decomposition):
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
