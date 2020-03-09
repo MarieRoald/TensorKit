@@ -10,6 +10,7 @@ from .decompositions import KruskalTensor, Parafac2Tensor
 from .base_decomposer import BaseDecomposer
 from . import decompositions
 from .. import utils
+from .utils import quadratic_form_trace
 
 
 class BaseSubProblem:
@@ -176,7 +177,18 @@ class Parafac2ADMM(BaseParafac2SubProblem):
     # In our notes: U -> dual variable
     #               \tilde{B} -> aux_fms
     #               B -> decomposition
-    def __init__(self, rho, tol=1e-3, max_it=50, non_negativity=False, verbose=False):
+    def __init__(
+        self,
+        rho=None,
+        tol=1e-3,
+        max_it=50,
+        non_negativity=False,
+        l2_similarity=None,
+        verbose=False,
+        decay_num_it=False,
+        num_it_converge_at=30,
+        num_it_converge_to=5,
+    ):
         if rho is None:
             self.auto_rho = True
         else:
@@ -184,10 +196,28 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         self.rho = rho
         self.tol = tol
-        self.max_it = max_it
+        self._max_it = max_it
+        
+        self._decay_num_it = decay_num_it
+        self._num_it_converge_to = num_it_converge_to
+        self._num_it_decay_rate = (num_it_converge_to/max_it)**(1/num_it_converge_at)
+
         self.non_negativity = non_negativity
+        self.l2_similarity = l2_similarity
+        if non_negativity and l2_similarity is not None:
+            raise ValueError("Not implemented non negative similarity")
         self.verbose = verbose
         self._qr_cache = None
+
+    @property
+    def max_it(self):
+        converge_to = self._num_it_converge_to
+        if not self._decay_num_it or self._max_it <= converge_to:
+            return self._max_it
+        
+        self._max_it = int(self._num_it_decay_rate*self._max_it)
+        return self._max_it
+
     
     def update_decomposition(
         self, X, decomposition, projected_X=None, should_update_projections=True
@@ -198,12 +228,15 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         # Init constraint by projecting the decomposition
         aux_fms = self.init_constraint(decomposition.projection_matrices, decomposition.blueprint_B)
         dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
+
+        if projected_X is None:
+            projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
+
         for i in range(self.max_it):
+            self.update_blueprint(X, decomposition, aux_fms, dual_variables, projected_X)
+
             if should_update_projections:
                 self.update_projections(X, decomposition, aux_fms, dual_variables)
-                projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
-            
-            if projected_X is None:
                 projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
 
             self.update_blueprint(X, decomposition, aux_fms, dual_variables, projected_X)
@@ -227,10 +260,9 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
     def init_constraint(self, init_P, init_B):
         B = [P_k@init_B for P_k in init_P]
-        if self.non_negativity:
-            return [np.maximum(B_k, 0, out=B_k) for B_k in B]
-        else:
-            return B
+        return [
+            self.constraint_prox(B_k) for B_k in B
+        ]
 
     def compute_next_aux_fms(self, decomposition, dual_variables):
         projections = decomposition.projection_matrices
@@ -242,10 +274,15 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         ]
     
     def constraint_prox(self, x):
-        if not self.non_negativity:
-            return x
-        else:
+        if self.non_negativity:
             return np.maximum(x, 0)
+        # Sjekk både temporal og spatial
+        # Sjekk temporal
+        elif self.l2_similarity is not None:
+            L = self.l2_similarity + 0.5*self.rho*np.identity(self.l2_similarity.shape[0])
+            return 0.5*self.rho*np.linalg.solve(L, x)
+        else:
+            return x
 
     def update_dual(self, decomposition, aux_fms, dual_variables):
         for P_k, aux_fm, dual_variable in zip(decomposition.projection_matrices, aux_fms, dual_variables):
@@ -314,6 +351,16 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         
         return duality_gap < self.tol and aux_change_criterion < self.tol
+    
+    def regulariser(self, factor_matrices):
+        reg = 0
+        if self.l2_similarity is not None:
+            factor_matrices = np.array(factor_matrices)
+            reg += sum(
+                quadratic_form_trace(self.l2_similarity, factor_matrix)
+                for factor_matrix in factor_matrices
+            )
+        return reg
         
 
 class FlexibleParafac2ADMM(BaseParafac2SubProblem):
@@ -369,8 +416,8 @@ class BlockParafac2(BaseDecomposer):
     def loss(self):
         factor_matrices = [
             self.decomposition.A,
-            (self.decomposition.projection_matrices,
-            self.decomposition.B), self.decomposition.C
+            np.array(self.decomposition.B),
+            self.decomposition.C
         ]
         return (
             self.SSE + 
