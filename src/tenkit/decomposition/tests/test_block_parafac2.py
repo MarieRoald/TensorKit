@@ -1,6 +1,6 @@
 import pytest
 from tenkit.decomposition import KruskalTensor, Parafac2Tensor
-from tenkit.decomposition import RLS, Parafac2RLS, BlockParafac2, ADMMSubproblem
+from tenkit.decomposition import RLS, Parafac2RLS, BlockParafac2, ADMMSubproblem, Parafac2ADMM
 from scipy.optimize import approx_fprime
 import numpy as np
 from tenkit.decomposition.cp import get_sse_lhs
@@ -22,7 +22,6 @@ class BaseTestSubproblem():
         return KruskalTensor.random_init([30, 40, 50], 4, random_method='uniform')
 
     def check_gradient(self, decomposition, **kwargs):
-        
         X = decomposition.construct_tensor()
         wrong_decomposition = KruskalTensor.random_init(
             decomposition.shape,
@@ -191,7 +190,28 @@ class BaseTestParafac2Subproblem():
 
 class TestParafac2RLSSubproblem(BaseTestParafac2Subproblem):
     SubProblem = Parafac2RLS
+    
+class TestParafac2ADMMSubproblem(BaseTestParafac2Subproblem):
+    SubProblem = Parafac2ADMM
 
+    def test_smoothness_prox_grad(self, random_rank4_parafac2_tensor):
+        num_nodes = random_rank4_parafac2_tensor.shape[1]
+        B = np.array(random_rank4_parafac2_tensor.B)
+
+        L = np.zeros((num_nodes, num_nodes))
+        for node in range(num_nodes):
+            L[(node - 1) % num_nodes, node] -= 1
+            L[node, node] += 2
+            L[(node + 1) % num_nodes, node] -= 1
+        rho = 2
+        smooth_admm = self.SubProblem(l2_similarity=L, rho=rho)
+        B2 = smooth_admm.constraint_prox(B)
+
+        def loss(x):
+            x = x.reshape(B2.shape)
+            return smooth_admm.regulariser(x) + (rho/2)*np.sum((x - B)**2)
+        
+        assert np.linalg.norm(approx_fprime(B2.ravel(), loss, 1e-10), np.inf) < 1e-3
 
 class TestBlockParafac2:
     @pytest.fixture
