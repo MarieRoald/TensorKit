@@ -196,7 +196,7 @@ class TestParafac2ADMMSubproblem(BaseTestParafac2Subproblem):
 
     def test_smoothness_prox_grad(self, random_rank4_parafac2_tensor):
         num_nodes = random_rank4_parafac2_tensor.shape[1]
-        B = np.array(random_rank4_parafac2_tensor.B)
+        B = np.array(random_rank4_parafac2_tensor.B).copy()
 
         L = np.zeros((num_nodes, num_nodes))
         for node in range(num_nodes):
@@ -204,14 +204,20 @@ class TestParafac2ADMMSubproblem(BaseTestParafac2Subproblem):
             L[node, node] += 2
             L[(node + 1) % num_nodes, node] -= 1
         rho = 2
-        smooth_admm = self.SubProblem(l2_similarity=L, rho=rho)
-        B2 = smooth_admm.constraint_prox(B)
+        smooth_admm = self.SubProblem(l2_similarity=0*L, rho=rho,)
+        B2 = np.array(
+            [
+                smooth_admm.constraint_prox(Bk, random_rank4_parafac2_tensor, k) 
+                for k, Bk in enumerate(B)
+            ]
+        )
 
         def loss(x):
-            x = x.reshape(B2.shape)
+            x = x.reshape(B.shape)
             return smooth_admm.regulariser(x) + (rho/2)*np.sum((x - B)**2)
         
-        assert np.linalg.norm(approx_fprime(B2.ravel(), loss, 1e-10), np.inf) < 1e-3
+        deriv = approx_fprime(B2.ravel(), loss, 1e-10)
+        assert np.linalg.norm(deriv, np.inf) < 1e-3
 
 class TestBlockParafac2:
     @pytest.fixture
