@@ -585,6 +585,7 @@ class CP_OPT(BaseCP):
         factor_matrices = base.unflatten_factors(x, self.rank, self.X.shape)
         self.decomposition = decompositions.KruskalTensor(factor_matrices)
         self.result = d
+        self.store_checkpoint()
 
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, importance_weights=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
