@@ -184,6 +184,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         max_it=50,
         non_negativity=False,
         l2_similarity=None,
+        temporal_similarity=0,
         verbose=False,
         decay_num_it=False,
         num_it_converge_at=30,
@@ -204,6 +205,13 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         self.non_negativity = non_negativity
         self.l2_similarity = l2_similarity
+        self.temporal_similarity = temporal_similarity
+
+        if self.temporal_similarity > 0:
+            raise RuntimeError("This doesn't work")
+
+        if self.temporal_similarity > 0 and l2_similarity is None:
+            self.l2_similarity = 0
         if non_negativity and l2_similarity is not None:
             raise ValueError("Not implemented non negative similarity")
         self.verbose = verbose
@@ -226,7 +234,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         if self.auto_rho:
             self.rho, self._qr_cache = self.compute_auto_rho(decomposition)
         # Init constraint by projecting the decomposition
-        aux_fms = self.init_constraint(decomposition.projection_matrices, decomposition.blueprint_B)
+        aux_fms = self.init_constraint(decomposition)
         dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
 
         if projected_X is None:
@@ -258,10 +266,11 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         return rho, np.linalg.qr(lhs)
 
-    def init_constraint(self, init_P, init_B):
+    def init_constraint(self, decomposition):
+        init_P, init_B = decomposition.projection_matrices, decomposition.blueprint_B
         B = [P_k@init_B for P_k in init_P]
         return [
-            self.constraint_prox(B_k) for B_k in B
+            self.constraint_prox(B_k, decomposition, k) for k, B_k in enumerate(B)
         ]
 
     def compute_next_aux_fms(self, decomposition, dual_variables):
@@ -269,18 +278,29 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         blueprint_B = decomposition.blueprint_B
         return [
             self.constraint_prox(
-                P_k@blueprint_B + dual_variables[k]
+                P_k@blueprint_B + dual_variables[k], decomposition, k
             ) for k, P_k in enumerate(projections)
         ]
     
-    def constraint_prox(self, x):
+    def constraint_prox(self, x, decomposition, k):
         if self.non_negativity:
             return np.maximum(x, 0)
-        # Sjekk både temporal og spatial
-        # Sjekk temporal
         elif self.l2_similarity is not None:
-            L = self.l2_similarity + 0.5*self.rho*np.identity(self.l2_similarity.shape[0])
-            return 0.5*self.rho*np.linalg.solve(L, x)
+            similar_to=0
+            step_length=0
+            # if k == 0:
+            #     step_length = 1
+            #     similar_to = decomposition.B[k+1]
+            # elif k == (decomposition.shape[2] - 1):
+            #     step_length = 1
+            #     similar_to = decomposition.B[k-1]
+            # else:
+            #     step_length = 2
+            #     similar_to = decomposition.B[k-1] + decomposition.B[k+1]
+
+            I = np.identity(self.l2_similarity.shape[0])
+            L = self.l2_similarity + (0.5*self.rho + self.temporal_similarity*step_length)*I
+            return np.linalg.solve(L, 0.5*self.rho*x + self.temporal_similarity*similar_to)
         else:
             return x
 
@@ -294,6 +314,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         A = decomposition.A
         blueprint_B = decomposition.blueprint_B
         C = decomposition.C
+        # TODO: randomise order
         for k, X_k in enumerate(X):
             unreg_lhs = (A*C[k])@(blueprint_B.T)
             reg_lhs = np.sqrt(self.rho/2)*(blueprint_B.T)
@@ -347,7 +368,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         dual_var_norm_sq = sum(np.linalg.norm(dual_var)**2 for dual_var in dual_variables)
         aux_change_criterion = (aux_change_sq + 1e-16) / (dual_var_norm_sq + 1e-16)
         if self.verbose:
-            print("primal criteria", duality_gap, "dual criteria", aux_change)
+            print("primal criteria", duality_gap, "dual criteria", aux_change_sq)
 
         
         return duality_gap < self.tol and aux_change_criterion < self.tol
@@ -360,6 +381,12 @@ class Parafac2ADMM(BaseParafac2SubProblem):
                 quadratic_form_trace(self.l2_similarity, factor_matrix)
                 for factor_matrix in factor_matrices
             )
+        if self.temporal_similarity > 0:
+            for k, B_k in enumerate(factor_matrices):   # <- This should not be B_k
+                if k > 0:
+                    reg += self.temporal_similarity*(np.linalg.norm(B_k - factor_matrices[k-1])**2)
+                if k < len(factor_matrices) - 1:
+                    reg += self.temporal_similarity*(np.linalg.norm(B_k - factor_matrices[k+1])**2)
         return reg
         
 
@@ -452,8 +479,10 @@ class BlockParafac2(BaseDecomposer):
             self._update_parafac2_factors()
 
             if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
-                print(f'{self.current_iteration:6d}: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
-                      f'improvement is {self._rel_function_change:g}')
+                rel_change = np.asscalar(np.array(self._rel_function_change))
+
+                print(f'{self.current_iteration:6d}: The MSE is {self.MSE:4g}, f is {np.asscalar(self.loss):4g}, '
+                      f'improvement is {rel_change:g}')
 
             self._after_fit_iteration()
 
