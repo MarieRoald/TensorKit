@@ -472,7 +472,7 @@ class CP_OPT(BaseCP):
         lower_bounds=None,
         upper_bounds=None,
         method='l-bfgs-b',
-        mask=None,
+        importance_weights=None,
         factor_constraints=None,
         loss_tol=1e-10,
     ):
@@ -490,6 +490,8 @@ class CP_OPT(BaseCP):
         self.upper_bounds = upper_bounds
         self.method = method
 
+        self.default_importance_weights = importance_weights
+
         self.factor_constraints = factor_constraints
         self.loss_tol = loss_tol
 
@@ -498,7 +500,11 @@ class CP_OPT(BaseCP):
             max_its = self.max_its
         if self.factor_constraints is None:
             self.factor_constraints = [{} for _ in X.shape]
-        self.importance_weights = importance_weights
+
+        if importance_weights is not None:
+            self.importance_weights = importance_weights
+        else:
+            self.importance_weights = self.default_importance_weights
         
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.options = {'maxiter':max_its, 'gtol': self.convergence_tol, 'ftol': self.loss_tol}
@@ -507,27 +513,22 @@ class CP_OPT(BaseCP):
         self.initial_factors_flattened = base.flatten_factors(self.decomposition.factor_matrices)
 
     def create_bounds(self, lower_bounds, upper_bounds, sizes, rank):
-
-        if (lower_bounds is None) and (upper_bounds is None):
-            return None
+        #if (lower_bounds is None) and (upper_bounds is None):
+        #    return None
 
         if lower_bounds is None:
             lower_bounds = -np.inf
         if upper_bounds is None:
             upper_bounds = np.inf
 
-        lower_bounds = self._create_bounds(lower_bounds, sizes, rank)
-        upper_bounds = self._create_bounds(upper_bounds, sizes, rank)
+        lower_bounds = self._create_bounds_for_each_factor_element(lower_bounds, sizes, rank)
+        upper_bounds = self._create_bounds_for_each_factor_element(upper_bounds, sizes, rank)
 
 
         return self._flattened_bounds(lower_bounds, upper_bounds)
 
-
-    def _create_bounds(self, bounds, sizes, rank):
-
+    def _create_bounds_for_each_factor_element(self, bounds, sizes, rank):
         if self._isiterable(bounds) == False:
-            if bounds is None:
-                bounds = np.inf
             bounds = [bounds] * len(sizes)
         # TODO: assert bounds length = sizes length?
         full_bounds = []
@@ -568,6 +569,7 @@ class CP_OPT(BaseCP):
         #factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
         #self.decomposition = decompositions.KruskalTensor(factor_matrices)
         #self.result = result
+        # TODO: THIS must be fixed
         x, f, d = optimize.fmin_l_bfgs_b(
             func=self._flattened_loss,
             x0=self.initial_factors_flattened,
@@ -630,7 +632,7 @@ class CP_OPT(BaseCP):
 
     @property
     def SSE(self):
-        return 2*self._compute_weighted_SSE(self.decomposition.factor_matrices, self.X)
+        return 2*self._compute_weighted_SSE(self.decomposition.factor_matrices)
 
     @property
     def MSE(self):
