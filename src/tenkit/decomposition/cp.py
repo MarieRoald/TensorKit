@@ -571,22 +571,6 @@ class CP_OPT(BaseCP):
         factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
         self.decomposition = decompositions.KruskalTensor(factor_matrices)
         self.result = result
-
-        # TODO: THIS must be fixed
-        #x, f, d = optimize.fmin_l_bfgs_b(
-        #    func=self._flattened_loss,
-        #    x0=self.initial_factors_flattened,
-        #    fprime=self._flattened_gradient,
-        #    bounds=list(zip(self.bounds.lb, self.bounds.ub)),
-        #    pgtol = self.options['gtol'],
-        #    maxiter=self.options['maxiter'],
-        #    factr = self.loss_tol,
-        #    callback=None,
-        #)
-
-        #factor_matrices = base.unflatten_factors(x, self.rank, self.X.shape)
-        #self.decomposition = decompositions.KruskalTensor(factor_matrices)
-        #self.result = d
         it = self.result['nit']
 
         if (self.checkpoint_frequency > 0) and ((it+1) % self.checkpoint_frequency != 0):
