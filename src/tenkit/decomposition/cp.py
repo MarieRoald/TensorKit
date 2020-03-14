@@ -418,7 +418,7 @@ class CP_ALS(BaseCP):
 
     def _update_als_factors(self):
         """Updates factors with alternating least squares."""
-        num_modes = len(self.X.shape) # TODO: Should this be cashed?
+        num_modes = len(self.X.shape) 
         for mode in range(num_modes):
             self._update_als_factor(mode)
    
@@ -444,7 +444,7 @@ class CP_ALS(BaseCP):
 
             self._after_fit_iteration()
 
-        if ((it+1) % self.checkpoint_frequency != 0) and (self.checkpoint_frequency > 0):
+        if (self.checkpoint_frequency > 0) and ((it+1) % self.checkpoint_frequency != 0):
             self.store_checkpoint()
 
     def init_random(self):
@@ -472,9 +472,9 @@ class CP_OPT(BaseCP):
         lower_bounds=None,
         upper_bounds=None,
         method='l-bfgs-b',
+        method_options=None,
         importance_weights=None,
         factor_constraints=None,
-        loss_tol=1e-10,
     ):
         super().__init__(
             rank=rank,
@@ -489,11 +489,13 @@ class CP_OPT(BaseCP):
         self.lower_bounds = lower_bounds
         self.upper_bounds = upper_bounds
         self.method = method
+        self.method_options = method_options
+
+        if self.method_options is None:
+            self.method_options = {}
 
         self.default_importance_weights = importance_weights
-
         self.factor_constraints = factor_constraints
-        self.loss_tol = loss_tol
 
     def _init_fit(self, X, max_its, initial_decomposition, importance_weights):
         if max_its is None:
@@ -507,14 +509,14 @@ class CP_OPT(BaseCP):
             self.importance_weights = self.default_importance_weights
         
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self.options = {'maxiter':max_its, 'gtol': self.convergence_tol, 'ftol': self.loss_tol}
+        self.options = {'maxiter':max_its, 'gtol': self.convergence_tol, **self.method_options}
 
         self.bounds = self.create_bounds(self.lower_bounds, self.upper_bounds, X.shape, self.rank)
         self.initial_factors_flattened = base.flatten_factors(self.decomposition.factor_matrices)
 
     def create_bounds(self, lower_bounds, upper_bounds, sizes, rank):
-        #if (lower_bounds is None) and (upper_bounds is None):
-        #    return None
+        if (lower_bounds is None) and (upper_bounds is None):
+            return None
 
         if lower_bounds is None:
             lower_bounds = -np.inf
@@ -556,36 +558,39 @@ class CP_OPT(BaseCP):
     def _fit(self):
         """Fit a CP model
         """
-        #result = optimize.minimize(
-        #    fun=self._flattened_loss,
-        #    method=self.method,
-        #    x0=self.initial_factors_flattened,
-        #    jac=self._flattened_gradient,
-        #    bounds=self.bounds,
-        #    options=self.options,
-        #    callback=None
-        #)
-        
-        #factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
-        #self.decomposition = decompositions.KruskalTensor(factor_matrices)
-        #self.result = result
-        # TODO: THIS must be fixed
-        x, f, d = optimize.fmin_l_bfgs_b(
-            func=self._flattened_loss,
+        result = optimize.minimize(
+            fun=self._flattened_loss,
+            method=self.method,
             x0=self.initial_factors_flattened,
-            fprime=self._flattened_gradient,
-            bounds=list(zip(self.bounds.lb, self.bounds.ub)),
-            pgtol = self.options['gtol'],
-            maxiter=self.options['maxiter'],
-            factr = self.loss_tol,
-            callback=None,
-
+            jac=self._flattened_gradient,
+            bounds=self.bounds,
+            options=self.options,
+            callback=None
         )
-
-        factor_matrices = base.unflatten_factors(x, self.rank, self.X.shape)
+        
+        factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
         self.decomposition = decompositions.KruskalTensor(factor_matrices)
-        self.result = d
-        self.store_checkpoint()
+        self.result = result
+
+        # TODO: THIS must be fixed
+        #x, f, d = optimize.fmin_l_bfgs_b(
+        #    func=self._flattened_loss,
+        #    x0=self.initial_factors_flattened,
+        #    fprime=self._flattened_gradient,
+        #    bounds=list(zip(self.bounds.lb, self.bounds.ub)),
+        #    pgtol = self.options['gtol'],
+        #    maxiter=self.options['maxiter'],
+        #    factr = self.loss_tol,
+        #    callback=None,
+        #)
+
+        #factor_matrices = base.unflatten_factors(x, self.rank, self.X.shape)
+        #self.decomposition = decompositions.KruskalTensor(factor_matrices)
+        #self.result = d
+        it = self.result['nit']
+
+        if (self.checkpoint_frequency > 0) and ((it+1) % self.checkpoint_frequency != 0):
+            self.store_checkpoint()
 
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, importance_weights=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
