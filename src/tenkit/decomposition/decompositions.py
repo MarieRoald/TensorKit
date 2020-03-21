@@ -663,7 +663,6 @@ class Parafac2Tensor(EvolvingTensor):
 
     @classmethod
     def random_init(cls, sizes, rank, non_negativity=None):
-
         # TODO: Check if we should use rand or randn
 
         if isinstance(sizes[1], int):
