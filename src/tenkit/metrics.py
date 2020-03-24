@@ -124,13 +124,6 @@ def core_consistency(X, A, B, C, normalized=False):
     # TODO: generalise to more than three modes
     F = A.shape[1]
 
-
-
-
-
-
-
-
     # Create the superdiagonal tensor
     T = np.zeros((F,F,F))
     np.fill_diagonal(T, 1)

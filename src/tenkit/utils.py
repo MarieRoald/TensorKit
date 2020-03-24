@@ -230,3 +230,16 @@ def slice_SSE(X_slices1, X_slices2):
     for slice1, slice2, in zip(X_slices1, X_slices2):
         SSE += np.sum((slice1-slice2)**2)
     return SSE
+
+
+def add_noise(X, noise_level, noise_method="standard_normal"):
+    """Add random noise to a tensor.
+
+    The noise method must be the name of a method in numpy.random that
+    takes the output shape as first argument.
+    """
+    noise_method = getattr(np.random, noise_method)
+    noise = noise_method(X.shape)
+    noise *= noise_level*np.linalg.norm(X)/np.linalg.norm(noise)
+    
+    return X + noise

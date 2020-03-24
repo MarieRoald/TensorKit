@@ -14,6 +14,8 @@ from .base_decomposer import BaseDecomposer
 __all__ = ['CP_ALS', 'CP_OPT']
 
 
+# TODO: factor_penalties dictionaries instead of many arguments
+# To prevent breaking old code, we can add a deprecation period
 class BaseCP(BaseDecomposer):
     r"""CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares.
 
@@ -230,16 +232,21 @@ class BaseCP(BaseDecomposer):
 
     @property
     def loss(self):
-        loss = self.SSE
+        return self.SSE
+        return self.SSE + self.regularisation_penalty
+   
+    @property
+    def regularisation_penalty(self):
+        loss = 0
         if self.ridge_penalties is not None:
             for ridge, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
                 loss += ridge*np.linalg.norm(factor_matrix)**2
         if self.tikhonov_matrices is not None:
-            for tikhonov_matrix, factor_matrix in zip(self.ridge_penalties, self.factor_matrices):
-                for r in range(self.rank):
-                    loss += factor_matrix[:, r]@(tikhonov_matrices@factor_matrix[:, r])
+            for tikhonov_matrix, factor_matrix in zip(self.tikhonov_matrices, self.factor_matrices):
+                if tikhonov_matrix is not None:
+                    loss += 0.5*quadratic_form_trace(tikhonov_matrix, factor_matrix)
         return loss
-   
+
     @property
     def reconstructed_X(self):
         return self.decomposition.construct_tensor()
@@ -418,7 +425,7 @@ class CP_ALS(BaseCP):
 
     def _update_als_factors(self):
         """Updates factors with alternating least squares."""
-        num_modes = len(self.X.shape) # TODO: Should this be cashed?
+        num_modes = len(self.X.shape) 
         for mode in range(num_modes):
             self._update_als_factor(mode)
    
@@ -444,7 +451,7 @@ class CP_ALS(BaseCP):
 
             self._after_fit_iteration()
 
-        if ((it+1) % self.checkpoint_frequency != 0) and (self.checkpoint_frequency > 0):
+        if (self.checkpoint_frequency > 0) and ((it+1) % self.checkpoint_frequency != 0):
             self.store_checkpoint()
 
     def init_random(self):
@@ -472,9 +479,9 @@ class CP_OPT(BaseCP):
         lower_bounds=None,
         upper_bounds=None,
         method='l-bfgs-b',
-        mask=None,
-        factor_constraints=None,
-        loss_tol=1e-10,
+        method_options=None,
+        importance_weights=None,
+        factor_penalties=None,
     ):
         super().__init__(
             rank=rank,
@@ -483,31 +490,38 @@ class CP_OPT(BaseCP):
             init=init,
             loggers=loggers,
             checkpoint_frequency=checkpoint_frequency,
-            checkpoint_path=checkpoint_path
+            checkpoint_path=checkpoint_path,
         )
         self.print_frequency = print_frequency
         self.lower_bounds = lower_bounds
         self.upper_bounds = upper_bounds
         self.method = method
+        self.method_options = method_options
 
-        self.factor_constraints = factor_constraints
-        self.loss_tol = loss_tol
+        if self.method_options is None:
+            self.method_options = {}
+
+        self.default_importance_weights = importance_weights
+        self.factor_penalties = factor_penalties
 
     def _init_fit(self, X, max_its, initial_decomposition, importance_weights):
         if max_its is None:
             max_its = self.max_its
-        if self.factor_constraints is None:
-            self.factor_constraints = [{} for _ in X.shape]
-        self.importance_weights = importance_weights
+        if self.factor_penalties is None:
+            self.factor_penalties = [{} for _ in X.shape]
+
+        if importance_weights is not None:
+            self.importance_weights = importance_weights
+        else:
+            self.importance_weights = self.default_importance_weights
         
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
-        self.options = {'maxiter':max_its, 'gtol': self.convergence_tol, 'ftol': self.loss_tol}
+        self.options = {'maxiter':max_its, 'gtol': self.convergence_tol, **self.method_options}
 
         self.bounds = self.create_bounds(self.lower_bounds, self.upper_bounds, X.shape, self.rank)
         self.initial_factors_flattened = base.flatten_factors(self.decomposition.factor_matrices)
 
     def create_bounds(self, lower_bounds, upper_bounds, sizes, rank):
-
         if (lower_bounds is None) and (upper_bounds is None):
             return None
 
@@ -516,18 +530,14 @@ class CP_OPT(BaseCP):
         if upper_bounds is None:
             upper_bounds = np.inf
 
-        lower_bounds = self._create_bounds(lower_bounds, sizes, rank)
-        upper_bounds = self._create_bounds(upper_bounds, sizes, rank)
+        lower_bounds = self._create_bounds_for_each_factor_element(lower_bounds, sizes, rank)
+        upper_bounds = self._create_bounds_for_each_factor_element(upper_bounds, sizes, rank)
 
 
         return self._flattened_bounds(lower_bounds, upper_bounds)
 
-
-    def _create_bounds(self, bounds, sizes, rank):
-
+    def _create_bounds_for_each_factor_element(self, bounds, sizes, rank):
         if self._isiterable(bounds) == False:
-            if bounds is None:
-                bounds = np.inf
             bounds = [bounds] * len(sizes)
         # TODO: assert bounds length = sizes length?
         full_bounds = []
@@ -555,35 +565,31 @@ class CP_OPT(BaseCP):
     def _fit(self):
         """Fit a CP model
         """
-        #result = optimize.minimize(
-        #    fun=self._flattened_loss,
-        #    method=self.method,
-        #    x0=self.initial_factors_flattened,
-        #    jac=self._flattened_gradient,
-        #    bounds=self.bounds,
-        #    options=self.options,
-        #    callback=None
-        #)
-        
-        #factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
-        #self.decomposition = decompositions.KruskalTensor(factor_matrices)
-        #self.result = result
-        x, f, d = optimize.fmin_l_bfgs_b(
-            func=self._flattened_loss,
+        result = optimize.minimize(
+            fun=self._flattened_loss,
+            method=self.method,
             x0=self.initial_factors_flattened,
-            fprime=self._flattened_gradient,
-            bounds=list(zip(self.bounds.lb, self.bounds.ub)),
-            pgtol = self.options['gtol'],
-            maxiter=self.options['maxiter'],
-            factr = self.loss_tol,
-            callback=None,
-
+            jac=self._flattened_gradient,
+            bounds=self.bounds,
+            options=self.options,
+            callback=self._callback,
         )
-
-        factor_matrices = base.unflatten_factors(x, self.rank, self.X.shape)
+        
+        factor_matrices = base.unflatten_factors(result.x, self.rank, self.X.shape)
         self.decomposition = decompositions.KruskalTensor(factor_matrices)
-        self.result = d
+        self.result = result
+        it = self.result['nit']
 
+        if (self.checkpoint_frequency > 0) and ((it+1) % self.checkpoint_frequency != 0):
+            self.store_checkpoint()
+
+    def _callback(self, parameter_vector):
+        factor_matrices = base.unflatten_factors(parameter_vector, self.rank, self.X.shape)
+        self.decomposition = decompositions.KruskalTensor(factor_matrices)
+
+        self._after_fit_iteration()
+
+        
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, importance_weights=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
 
@@ -628,9 +634,23 @@ class CP_OPT(BaseCP):
         self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition, importance_weights=importance_weights)
         return self.decomposition
 
+    def _compute_regularisation_penalty(self, factor_matrices):
+        loss = 0
+        for i, fm in enumerate(factor_matrices):
+            if 'tikhonov_matrix' in self.factor_penalties[i]:
+                tikhonov_matrix = self.factor_penalties[i]['tikhonov_matrix']
+                loss += 0.5*quadratic_form_trace(tikhonov_matrix, fm)
+            elif 'ridge' in self.factor_penalties[i]:
+                loss += 0.5*self.factor_penalties[i]['ridge']*(np.linalg.norm(fm, 'fro')**2)
+        return loss        
+
+    @property
+    def regularisation_penalty(self):
+        return self._compute_regularisation_penalty(self.factor_matrices)
+
     @property
     def SSE(self):
-        return 2*self._compute_weighted_SSE(self.decomposition.factor_matrices, self.X)
+        return 2*self._compute_weighted_SSE(self.decomposition.factor_matrices)
 
     @property
     def MSE(self):
@@ -667,14 +687,8 @@ class CP_OPT(BaseCP):
     
     def _compute_loss(self, factor_matrices):
         loss = self._compute_weighted_SSE(factor_matrices)
-
-        for i, fm in enumerate(factor_matrices):
-            if 'tikhonov_matrix' in self.factor_constraints[i]:
-                tikhonov_matrix = self.factor_constraints[i]['tikhonov_matrix']
-                loss += 0.5*quadratic_form_trace(tikhonov_matrix, fm)
-            elif 'ridge' in self.factor_constraints[i]:
-                loss += 0.5*self.factor_constraints[i]['ridge']*(np.linalg.norm(fm, 'fro')**2)
-        return loss
+        reg = self._compute_regularisation_penalty(factor_matrices)
+        return loss + reg
 
     def _compute_weighted_gradient(self, factor_matrices):
         """Gradients for CP loss."""
@@ -702,11 +716,11 @@ class CP_OPT(BaseCP):
     def _compute_gradient(self, factor_matrices):
         gradients = self._compute_weighted_gradient(factor_matrices)
         for i, (fm, grad) in enumerate(zip(factor_matrices, gradients)):
-            if 'tikhonov_matrix' in self.factor_constraints[i]:
-                tikhonov_matrix = self.factor_constraints[i]['tikhonov_matrix']
+            if 'tikhonov_matrix' in self.factor_penalties[i]:
+                tikhonov_matrix = self.factor_penalties[i]['tikhonov_matrix']
                 grad += tikhonov_matrix@fm
-            elif 'ridge' in self.factor_constraints[i]:
-                grad += self.factor_constraints[i]['ridge']*fm
+            elif 'ridge' in self.factor_penalties[i]:
+                grad += self.factor_penalties[i]['ridge']*fm
         return gradients
 
     def _flattened_loss(self, flattened_factors):

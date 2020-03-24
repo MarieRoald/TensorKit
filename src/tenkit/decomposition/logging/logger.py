@@ -80,6 +80,10 @@ class ExplainedVarianceLogger(BaseLogger):
     def _log(self, decomposer):
         self.log_metrics.append(decomposer.explained_variance)
 
+class RegularisationPenaltyLogger(BaseLogger):
+    def _log(self, decomposer):
+        self.log_metrics.append(decomposer.regularisation_penalty)
+
 class CouplingErrorLogger(BaseLogger):
     def __init__(self, not_flexible_ok=False):
         super().__init__()
