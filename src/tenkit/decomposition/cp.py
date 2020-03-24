@@ -14,6 +14,8 @@ from .base_decomposer import BaseDecomposer
 __all__ = ['CP_ALS', 'CP_OPT']
 
 
+# TODO: factor_penalties dictionaries instead of many arguments
+# To prevent breaking old code, we can add a deprecation period
 class BaseCP(BaseDecomposer):
     r"""CP (CANDECOMP/PARAFAC) decomposition using Alternating Least Squares.
 
@@ -488,7 +490,7 @@ class CP_OPT(BaseCP):
             init=init,
             loggers=loggers,
             checkpoint_frequency=checkpoint_frequency,
-            checkpoint_path=checkpoint_path
+            checkpoint_path=checkpoint_path,
         )
         self.print_frequency = print_frequency
         self.lower_bounds = lower_bounds
@@ -518,7 +520,6 @@ class CP_OPT(BaseCP):
 
         self.bounds = self.create_bounds(self.lower_bounds, self.upper_bounds, X.shape, self.rank)
         self.initial_factors_flattened = base.flatten_factors(self.decomposition.factor_matrices)
-
 
     def create_bounds(self, lower_bounds, upper_bounds, sizes, rank):
         if (lower_bounds is None) and (upper_bounds is None):
@@ -633,6 +634,20 @@ class CP_OPT(BaseCP):
         self.fit(X=X, y=y, max_its=max_its, initial_decomposition=initial_decomposition, importance_weights=importance_weights)
         return self.decomposition
 
+    def _compute_regularisation_penalty(self, factor_matrices):
+        loss = 0
+        for i, fm in enumerate(factor_matrices):
+            if 'tikhonov_matrix' in self.factor_penalties[i]:
+                tikhonov_matrix = self.factor_penalties[i]['tikhonov_matrix']
+                loss += 0.5*quadratic_form_trace(tikhonov_matrix, fm)
+            elif 'ridge' in self.factor_penalties[i]:
+                loss += 0.5*self.factor_penalties[i]['ridge']*(np.linalg.norm(fm, 'fro')**2)
+        return loss        
+
+    @property
+    def regularisation_penalty(self):
+        return self._compute_regularisation_penalty(self.factor_matrices)
+
     @property
     def SSE(self):
         return 2*self._compute_weighted_SSE(self.decomposition.factor_matrices)
@@ -672,14 +687,8 @@ class CP_OPT(BaseCP):
     
     def _compute_loss(self, factor_matrices):
         loss = self._compute_weighted_SSE(factor_matrices)
-
-        for i, fm in enumerate(factor_matrices):
-            if 'tikhonov_matrix' in self.factor_penalties[i]:
-                tikhonov_matrix = self.factor_penalties[i]['tikhonov_matrix']
-                loss += 0.5*quadratic_form_trace(tikhonov_matrix, fm)
-            elif 'ridge' in self.factor_penalties[i]:
-                loss += 0.5*self.factor_penalties[i]['ridge']*(np.linalg.norm(fm, 'fro')**2)
-        return loss
+        reg = self._compute_regularisation_penalty(factor_matrices)
+        return loss + reg
 
     def _compute_weighted_gradient(self, factor_matrices):
         """Gradients for CP loss."""
