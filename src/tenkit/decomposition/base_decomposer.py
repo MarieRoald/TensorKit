@@ -199,7 +199,7 @@ class BaseDecomposer(ABC):
         If ``load_it=None``, then the latest checkpoint will be used.
         """
         # TODO: classmethod, dump all params. Requires major refactoring.
-        with h5py.File(checkpoint_path) as h5:
+        with h5py.File(checkpoint_path, "r") as h5:
             if 'final_iteration' not in h5.attrs:
                 raise ValueError(f'There is no checkpoints in {checkpoint_path}')
 
