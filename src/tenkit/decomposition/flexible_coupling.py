@@ -541,7 +541,7 @@ class FlexibleParafac2_ALS(CoupledMatrices_ALS):
         # TODO: classmethod, dump all params. Requires major refactoring.
         super().load_checkpoint(checkpoint_path, load_it=load_it)
 
-        with h5py.File(checkpoint_path) as h5:
+        with h5py.File(checkpoint_path, "r") as h5:
             group_name = f'parafac2_checkpoint_{self.current_iteration:05d}'
             if group_name not in h5:
                 raise ValueError(

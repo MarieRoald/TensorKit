@@ -119,7 +119,7 @@ class TestParafac2ALS:
 
             assert Path(checkpoint_path).is_file()
             
-            with h5py.File(checkpoint_path) as h5:
+            with h5py.File(checkpoint_path, "r") as h5:
                 for i in range(max_its):
                     if (i+1) % checkpoint_frequency == 0:
                         assert f'checkpoint_{i:05d}' in h5

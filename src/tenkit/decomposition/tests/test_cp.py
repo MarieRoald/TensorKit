@@ -9,7 +9,7 @@ import pytest
 from scipy.optimize import check_grad
 
 from tenkit import base, metrics
-from tenkit.decomposition import cp, decompositions
+from tenkit.decomposition import cp, decompositions, logging
 
 from .test_utils import ensure_monotonicity
 
@@ -106,7 +106,7 @@ class TestCPALS:
 
             assert Path(checkpoint_path).is_file()
             
-            with h5py.File(checkpoint_path) as h5:
+            with h5py.File(checkpoint_path, "r") as h5:
                 for i in range(max_its):
                     if (i+1) % checkpoint_frequency == 0:
                         assert f'checkpoint_{i:05d}' in h5
@@ -271,3 +271,11 @@ class TestCPOPT:
         def b_grad(cp_opt, factors): return cp_opt._compute_gradient(factors)[1]
 
         assert (b_grad(cp_opt, smooth_rank4_ktensor) != b_grad(cp_smooth_opt, smooth_rank4_ktensor)).all()
+    
+    def test_logging_produces_log_of_right_size(self, smooth_rank4_ktensor):
+        logger = logging.LossLogger()
+        X = smooth_rank4_ktensor.construct_tensor()
+        cp_opt = self.CP(4, max_its=42, convergence_tol=-np.inf, loggers=[logger], method='cg')
+        cp_opt.fit(X)
+
+        assert len(logger.log_metrics) == 42

@@ -34,7 +34,7 @@ class BaseDecomposedTensor(ABC):
     
     @classmethod
     def from_file(cls, filename):
-        with h5py.File(filename) as h5:
+        with h5py.File(filename, "r") as h5:
             return cls.load_from_hdf5_group(h5)
     
     @abstractclassmethod
