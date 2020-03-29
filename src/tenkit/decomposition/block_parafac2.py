@@ -2,6 +2,9 @@ from copy import copy
 from pathlib import Path
 import h5py
 import numpy as np
+import scipy.linalg as sla
+import scipy.sparse.linalg as spla
+import scipy.sparse as sparse
 
 from .. import base
 from .cp import get_sse_lhs
@@ -133,6 +136,7 @@ class BaseParafac2SubProblem(BaseSubProblem):
 
 
 class Parafac2RLS(BaseParafac2SubProblem):
+    SKIP_CACHE = False
     def __init__(self, ridge_penalty=0):
         self.ridge_penalty = ridge_penalty
         self.non_negativity = False
@@ -173,10 +177,25 @@ class Parafac2RLS(BaseParafac2SubProblem):
         return RLS._get_rightsolve(self)
 
 
+def safe_factorise(array):
+    if sparse.issparse(array):
+        return spla.splu(array)
+    else:
+        return sla.cho_factor(array)
+
+
+def safe_factor_solve(factor, x):
+    if isinstance(factor, spla.SuperLU):
+        return factor.solve(x)
+    else:
+        return sla.cho_solve(factor, x)
+
+
 class Parafac2ADMM(BaseParafac2SubProblem):
     # In our notes: U -> dual variable
     #               \tilde{B} -> aux_fms
     #               B -> decomposition
+    SKIP_CACHE = False
     def __init__(
         self,
         rho=None,
@@ -216,6 +235,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             raise ValueError("Not implemented non negative similarity")
         self.verbose = verbose
         self._qr_cache = None
+        self._reg_factor_cache = None
 
     @property
     def max_it(self):
@@ -231,6 +251,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self, X, decomposition, projected_X=None, should_update_projections=True
     ):
         self._qr_cache = None
+        self._reg_factor_cache = None
         if self.auto_rho:
             self.rho, self._qr_cache = self.compute_auto_rho(decomposition)
         # Init constraint by projecting the decomposition
@@ -298,9 +319,23 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             #     step_length = 2
             #     similar_to = decomposition.B[k-1] + decomposition.B[k+1]
 
-            I = np.identity(self.l2_similarity.shape[0])
-            L = self.l2_similarity + (0.5*self.rho + self.temporal_similarity*step_length)*I
-            return np.linalg.solve(L, 0.5*self.rho*x + self.temporal_similarity*similar_to)
+
+            if self.SKIP_CACHE:
+                I = np.identity(self.l2_similarity.shape[0])
+                reg_matrix = self.l2_similarity + (0.5*self.rho + self.temporal_similarity*step_length)*I
+                return np.linalg.solve(reg_matrix, 0.5*self.rho*x + self.temporal_similarity*similar_to)
+
+            if self._reg_factor_cache is None:
+                I = np.identity(self.l2_similarity.shape[0])
+                reg_matrix = self.l2_similarity + (0.5*self.rho + self.temporal_similarity*step_length)*I
+
+                factor = safe_factorise(sparse.csc_matrix(reg_matrix))
+                self._reg_factor_cache = factor
+            else:
+                factor = self._reg_factor_cache
+            
+            rhs = 0.5*self.rho*x + self.temporal_similarity*similar_to
+            return safe_factor_solve(factor, rhs)
         else:
             return x
 
@@ -454,19 +489,19 @@ class BlockParafac2(BaseDecomposer):
     def _update_parafac2_factors(self):
         should_update_projections = self.current_iteration % self.projection_update_frequency == 0
         # The function below updates the decomposition and the projected X inplace.
-        #print(f'{self.current_iteration:6d}A: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
-        #              f'improvement is {self._rel_function_change:g}')
+        print(f'Before {self.current_iteration:6d}A: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+                      f'improvement is {self._rel_function_change:g}')
         decomposition = self.decomposition
         self.sub_problems[1].update_decomposition(
             self.X, self.decomposition, self.projected_X, should_update_projections=should_update_projections
         )
-        #print(f'{self.current_iteration:6d}B: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
-        #              f'improvement is {self._rel_function_change:g}')
+        print(f'Before {self.current_iteration:6d}B: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+                      f'improvement is {self._rel_function_change:g}')
         self.sub_problems[0].update_decomposition(
             self.projected_X, self.cp_decomposition
         )
-        #print(f'{self.current_iteration:6d}C: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
-        #              f'improvement is {self._rel_function_change:g}')
+        print(f'Before {self.current_iteration:6d}C: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+                      f'improvement is {self._rel_function_change:g}')
         self.sub_problems[2].update_decomposition(
             self.projected_X, self.cp_decomposition
         )
