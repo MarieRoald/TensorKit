@@ -489,19 +489,19 @@ class BlockParafac2(BaseDecomposer):
     def _update_parafac2_factors(self):
         should_update_projections = self.current_iteration % self.projection_update_frequency == 0
         # The function below updates the decomposition and the projected X inplace.
-        print(f'Before {self.current_iteration:6d}A: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
-                      f'improvement is {self._rel_function_change:g}')
+        # print(f'Before {self.current_iteration:6d}A: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+        #               f'improvement is {self._rel_function_change:g}')
         decomposition = self.decomposition
         self.sub_problems[1].update_decomposition(
             self.X, self.decomposition, self.projected_X, should_update_projections=should_update_projections
         )
-        print(f'Before {self.current_iteration:6d}B: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
-                      f'improvement is {self._rel_function_change:g}')
+        # print(f'Before {self.current_iteration:6d}B: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+        #               f'improvement is {self._rel_function_change:g}')
         self.sub_problems[0].update_decomposition(
             self.projected_X, self.cp_decomposition
         )
-        print(f'Before {self.current_iteration:6d}C: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
-                      f'improvement is {self._rel_function_change:g}')
+        # print(f'Before {self.current_iteration:6d}C: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
+        #               f'improvement is {self._rel_function_change:g}')
         self.sub_problems[2].update_decomposition(
             self.projected_X, self.cp_decomposition
         )
