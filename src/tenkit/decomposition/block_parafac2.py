@@ -1,6 +1,7 @@
 from copy import copy
 from pathlib import Path
 import h5py
+    
 import numpy as np
 import scipy.linalg as sla
 import scipy.sparse.linalg as spla
@@ -203,6 +204,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         max_it=50,
         non_negativity=False,
         l2_similarity=None,
+        l1_penalty=None,
         temporal_similarity=0,
         verbose=False,
         decay_num_it=False,
@@ -224,6 +226,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         self.non_negativity = non_negativity
         self.l2_similarity = l2_similarity
+        self.l1_penalty = l1_penalty
         self.temporal_similarity = temporal_similarity
 
         if self.temporal_similarity > 0:
@@ -231,8 +234,11 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         if self.temporal_similarity > 0 and l2_similarity is None:
             self.l2_similarity = 0
-        if non_negativity and l2_similarity is not None:
+        if non_negativity and l2_similarity:
             raise ValueError("Not implemented non negative similarity")
+        if l2_similarity and l1_penalty:
+            raise ValueError("Not implemented L1+L2 with similarity")
+
         self.verbose = verbose
         self._qr_cache = None
         self._reg_factor_cache = None
@@ -304,8 +310,12 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         ]
     
     def constraint_prox(self, x, decomposition, k):
-        if self.non_negativity:
-            return np.maximum(x, 0)
+        if self.non_negativity and self.l1_penalty:
+            return np.maximum(x - self.l1_penalty, 0)
+        elif self.non_negativity:
+            return np.maximum(x, 0)      
+        elif self.l1_penalty:
+            return np.sign(x)*np.maximum(np.abs(x) - self.l1_penalty, 0)
         elif self.l2_similarity is not None:
             similar_to=0
             step_length=0
