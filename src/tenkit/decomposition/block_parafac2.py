@@ -234,9 +234,9 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         if self.temporal_similarity > 0 and l2_similarity is None:
             self.l2_similarity = 0
-        if non_negativity and l2_similarity:
+        if non_negativity and l2_similarity is not None:
             raise ValueError("Not implemented non negative similarity")
-        if l2_similarity and l1_penalty:
+        if l2_similarity is not None and l1_penalty:
             raise ValueError("Not implemented L1+L2 with similarity")
 
         self.verbose = verbose
