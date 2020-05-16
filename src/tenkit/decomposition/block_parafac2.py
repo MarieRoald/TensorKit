@@ -17,6 +17,11 @@ from .. import utils
 from .utils import quadratic_form_trace
 
 
+# Default callback
+def noop(*args, **kwargs):
+    pass
+
+
 class BaseSubProblem:
     def __init__(self):
         pass
@@ -71,7 +76,16 @@ class ADMMSubproblem(BaseSubProblem):
         self.mode = mode
         self.tol = tol
         self.max_it = max_it
+        
+        self._callback = noop
 
+    def callback(self, X, decomposition, fm, aux_fm, dual_variable):
+        """Calls self._callback, which should have the following signature:
+        self._callback(self, X, decomposition, fm, aux_fm, dual_variable)
+
+        By default callback does nothing.
+        """
+        self._callback(self, X, decomposition, fm, aux_fm, dual_variable)
     
     def update_decomposition(self, X, decomposition):
         # TODO: Cache QR decomposition of lhs.T
@@ -104,6 +118,7 @@ class ADMMSubproblem(BaseSubProblem):
             self.update_constraint(decomposition, aux_fm, dual_variable)
 
             dual_variable += fm - aux_fm
+            self.callback(self, X, decomposition, fm, aux_fm)
         
         # Use aux variable for hard constraints
         decomposition.factor_matrices[self.mode][:] = aux_fm
@@ -141,6 +156,7 @@ class Parafac2RLS(BaseParafac2SubProblem):
     def __init__(self, ridge_penalty=0):
         self.ridge_penalty = ridge_penalty
         self.non_negativity = False
+        self._callback = noop
 
     def compute_projected_X(self, projection_matrices, X, out=None):
         return compute_projected_X(projection_matrices, X, out=out)
@@ -210,6 +226,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         decay_num_it=False,
         num_it_converge_at=30,
         num_it_converge_to=5,
+        cache_components=True,
     ):
         if rho is None:
             self.auto_rho = True
@@ -242,7 +259,22 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self.verbose = verbose
         self._qr_cache = None
         self._reg_factor_cache = None
+        self.dual_variables = None
+        self.aux_fms = None
+        self.it_num = 0
 
+        self._cache_components = cache_components
+        
+        self._callback = noop
+
+    def callback(self, X, decomposition, aux_fms, dual_variable, init=False):
+        """Calls self._callback, which should have the following signature:
+        self._callback(self, X, decomposition, fm, aux_fm, dual_variable)
+
+        By default callback does nothing.
+        """
+        self._callback(self, X, decomposition, aux_fms, dual_variable, init)
+    
     @property
     def max_it(self):
         converge_to = self._num_it_converge_to
@@ -256,18 +288,32 @@ class Parafac2ADMM(BaseParafac2SubProblem):
     def update_decomposition(
         self, X, decomposition, projected_X=None, should_update_projections=True
     ):
+        # Clear caches
         self._qr_cache = None
         self._reg_factor_cache = None
+
+        # Compute rho
         if self.auto_rho:
             self.rho, self._qr_cache = self.compute_auto_rho(decomposition)
+
         # Init constraint by projecting the decomposition
-        aux_fms = self.init_constraint(decomposition)
-        dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
+        if self.aux_fms is None or self.it_num == 1 or (not self._cache_components):
+            aux_fms = self.init_constraint(decomposition)
+        else:
+            aux_fms = self.aux_fms
+
+        # Init dual variables
+        if self.dual_variables is None or self.it_num == 1 or (not self._cache_components):
+            dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
+        else:
+            dual_variables = self.dual_variables
 
         if projected_X is None:
             projected_X = self.compute_projected_X(decomposition.projection_matrices, X, out=projected_X)
 
+        # The decomposition is modified inplace each iteration
         for i in range(self.max_it):
+            self.callback(X, decomposition, aux_fms, dual_variables, init=(i==0))
             self.update_blueprint(X, decomposition, aux_fms, dual_variables, projected_X)
 
             if should_update_projections:
@@ -278,8 +324,14 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             old_aux_fms = aux_fms
             aux_fms = self.compute_next_aux_fms(decomposition, dual_variables)
             self.update_dual(decomposition, aux_fms, dual_variables)
+
             if self.has_converged(decomposition, aux_fms, old_aux_fms, dual_variables):
                 break
+
+        self.callback(X, decomposition, aux_fms, dual_variables, init=False)
+        self.dual_variables = dual_variables
+        self.aux_fms = aux_fms
+        self.it_num += 1
 
     def compute_auto_rho(self, decomposition):     
         lhs = base.khatri_rao(
@@ -483,6 +535,15 @@ class BlockParafac2(BaseDecomposer):
 
     def _check_valid_components(self, decomposition):
         return BaseParafac2._check_valid_components(self, decomposition)
+
+    @property
+    def regularisation_penalty(self):
+        factor_matrices = [
+            self.decomposition.A,
+            np.array(self.decomposition.B),
+            self.decomposition.C
+        ]
+        return sum(sp.regulariser(fm) for sp, fm in zip(self.sub_problems, factor_matrices))
 
     @property
     def loss(self):

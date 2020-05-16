@@ -254,7 +254,7 @@ class TestADMMParafac2(TestBlockParafac2):
                 Parafac2RLS(),
                 ADMMSubproblem(mode=2, non_negativity=False, rho=1),
             ],
-            convergence_tol=1e-6
+            convergence_tol=1e-8
         )
         pf2.fit(X)
 
@@ -269,7 +269,7 @@ class TestADMMParafac2(TestBlockParafac2):
                 Parafac2RLS(),
                 ADMMSubproblem(mode=2, non_negativity=True, rho=1),
             ],
-            convergence_tol=1e-6
+            convergence_tol=1e-8
         )
         pf2.fit(X)
 
