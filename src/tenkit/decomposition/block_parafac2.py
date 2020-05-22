@@ -216,7 +216,7 @@ def evolving_factor_total_variation(factor):
     factor_diff = factor[:, 1:] - factor[:, :-1]
     return np.linalg.norm(factor_diff.ravel(), 1)
 
-@ignore_warning(ConvergenceWarning)
+@ignore_warnings(category=ConvergenceWarning)
 def total_variation_prox(factor, strength):
     J, rank = factor.shape
     integration_matrix = np.tril(np.ones((J, J-1)), -1)
