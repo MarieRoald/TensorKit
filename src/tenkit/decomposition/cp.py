@@ -482,6 +482,7 @@ class CP_OPT(BaseCP):
         method_options=None,
         importance_weights=None,
         factor_penalties=None,
+        mask_value=None,
     ):
         super().__init__(
             rank=rank,
@@ -503,8 +504,9 @@ class CP_OPT(BaseCP):
 
         self.default_importance_weights = importance_weights
         self.factor_penalties = factor_penalties
+        self.mask_value = mask_value
 
-    def _init_fit(self, X, max_its, initial_decomposition, importance_weights):
+    def _init_fit(self, X, max_its, initial_decomposition, importance_weights=None):
         if max_its is None:
             max_its = self.max_its
         if self.factor_penalties is None:
@@ -514,6 +516,12 @@ class CP_OPT(BaseCP):
             self.importance_weights = importance_weights
         else:
             self.importance_weights = self.default_importance_weights
+        
+        if (self.mask_value is not None) and (self.importance_weights is not None):
+            mask = (X != self.mask_value)
+            self.importance_weights = mask*self.importance_weights
+        elif self.mask_value is not None:
+            self.importance_weights = (X != self.mask_value).astype(float)
         
         super()._init_fit(X=X, max_its=max_its, initial_decomposition=initial_decomposition)
         self.options = {'maxiter':max_its, 'gtol': self.convergence_tol, **self.method_options}
@@ -589,7 +597,6 @@ class CP_OPT(BaseCP):
 
         self._after_fit_iteration()
 
-        
     def fit(self, X, y=None, *, max_its=None, initial_decomposition=None, importance_weights=None):
         """Fit a CP model. Precomputed components must be specified if init method is `precomputed`.
 
