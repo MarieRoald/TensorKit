@@ -6,6 +6,7 @@ import numpy as np
 import scipy.linalg as sla
 import scipy.sparse.linalg as spla
 import scipy.sparse as sparse
+from sklearn.linear_model import Lasso
 
 from .. import base
 from .cp import get_sse_lhs
@@ -208,7 +209,31 @@ def safe_factor_solve(factor, x):
         return sla.cho_solve(factor, x)
 
 
+def evolving_factor_total_variation(factor):
+    factor_diff = factor[:, 1:] - factor[:, :-1]
+    return np.linalg.norm(factor_diff.ravel(), 1)
+
+
+def total_variation_prox(factor, strength):
+    J, rank = factor.shape
+    integration_matrix = np.tril(np.ones((J, J-1)), -1)
+
+
+    lasso = Lasso(alpha=strength, n_iter=500, selection='random')
+    lasso.fit(integration_matrix, factor)
+
+    new_factor = integration_matrix@lasso.coef_.T + lasso.intercept_
+    assert new_factor.shape == factor.shape
+    return new_factor
+
+
 class Parafac2ADMM(BaseParafac2SubProblem):
+    """
+    To add new regularisers:
+        * Change __init__
+        * Change constraint_prox
+        * Change regulariser
+    """
     # In our notes: U -> dual variable
     #               \tilde{B} -> aux_fms
     #               B -> decomposition
@@ -221,6 +246,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         non_negativity=False,
         l2_similarity=None,
         l1_penalty=None,
+        tv_penalty=None,
         temporal_similarity=0,
         verbose=False,
         decay_num_it=False,
@@ -244,6 +270,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self.non_negativity = non_negativity
         self.l2_similarity = l2_similarity
         self.l1_penalty = l1_penalty
+        self.tv_penalty = tv_penalty
         self.temporal_similarity = temporal_similarity
 
         if self.temporal_similarity > 0:
@@ -363,11 +390,13 @@ class Parafac2ADMM(BaseParafac2SubProblem):
     
     def constraint_prox(self, x, decomposition, k):
         if self.non_negativity and self.l1_penalty:
-            return np.maximum(x - self.l1_penalty, 0)
+            return np.maximum(x - 2*self.l1_penalty/self.rho, 0)
+        elif self.tv_penalty:
+            return total_variation_prox(x, 2*self.tv_penalty/self.rho)
         elif self.non_negativity:
             return np.maximum(x, 0)      
         elif self.l1_penalty:
-            return np.sign(x)*np.maximum(np.abs(x) - self.l1_penalty, 0)
+            return np.sign(x)*np.maximum(np.abs(x) - 2*self.l1_penalty/self.rho, 0)
         elif self.l2_similarity is not None:
             similar_to=0
             step_length=0
@@ -478,6 +507,12 @@ class Parafac2ADMM(BaseParafac2SubProblem):
                 quadratic_form_trace(self.l2_similarity, factor_matrix)
                 for factor_matrix in factor_matrices
             )
+        if self.l1_penalty is not None:
+            factor_matrices = np.array(factor_matrices)
+            reg += self.l1_penalty*np.linalg.norm(factor_matrices.ravel(), 1)
+        if self.tv_penalty is not None:
+            factor_matrices = np.array(factor_matrices)
+            reg += self.tv_penalty*evolving_factor_total_variation(factor_matrices)
         if self.temporal_similarity > 0:
             for k, B_k in enumerate(factor_matrices):   # <- This should not be B_k
                 if k > 0:
