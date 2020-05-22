@@ -8,6 +8,9 @@ import scipy.sparse.linalg as spla
 import scipy.sparse as sparse
 from sklearn.linear_model import Lasso
 
+from sklearn.utils.testing import ignore_warnings
+from sklearn.exceptions import ConvergenceWarning
+
 from .. import base
 from .cp import get_sse_lhs
 from .parafac2 import BaseParafac2, compute_projected_X, Parafac2_ALS
@@ -213,7 +216,7 @@ def evolving_factor_total_variation(factor):
     factor_diff = factor[:, 1:] - factor[:, :-1]
     return np.linalg.norm(factor_diff.ravel(), 1)
 
-
+@ignore_warning(ConvergenceWarning)
 def total_variation_prox(factor, strength):
     J, rank = factor.shape
     integration_matrix = np.tril(np.ones((J, J-1)), -1)
