@@ -222,7 +222,7 @@ def total_variation_prox(factor, strength):
     integration_matrix = np.tril(np.ones((J, J-1)), -1)
 
 
-    lasso = Lasso(alpha=strength, max_iter=500, selection='random')
+    lasso = Lasso(alpha=strength, max_iter=1000, selection='random')
     lasso.fit(integration_matrix, factor)
 
     new_factor = integration_matrix@lasso.coef_.T + lasso.intercept_
