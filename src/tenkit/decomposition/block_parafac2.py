@@ -639,9 +639,9 @@ class BlockParafac2(BaseDecomposer):
 
     def init_components(self, initial_decomposition=None):
         if self.init == 'ALS':
-            pf2 = Parafac2_ALS(self.rank, max_its=100)
-            pf2.fit(self.X)
-            self.decomposition = pf2.decomposition
+            self.pf2 = Parafac2_ALS(self.rank, max_its=100)
+            self.pf2.fit([Xi for Xi in self.X])
+            self.decomposition = self.pf2.decomposition
         else:
             BaseParafac2.init_components(self, initial_decomposition=initial_decomposition)
 
