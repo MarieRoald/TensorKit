@@ -638,7 +638,12 @@ class BlockParafac2(BaseDecomposer):
             self.store_checkpoint()
 
     def init_components(self, initial_decomposition=None):
-        BaseParafac2.init_components(self, initial_decomposition=initial_decomposition)
+        if self.init == 'ALS':
+            pf2 = Parafac2_ALS(self.rank, max_its=100)
+            pf2.fit(self.X)
+            self.decomposition = pf2.decomposition
+        else:
+            BaseParafac2.init_components(self, initial_decomposition=initial_decomposition)
 
     def _has_converged(self):
         has_converged = False
