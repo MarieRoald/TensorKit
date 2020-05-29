@@ -337,6 +337,7 @@ class Parafac2_ALS(BaseParafac2):
         orthonormal. If None, no modes are constrained. Note: all modes should not be
         orhtonormal and the evolving mode cannot be constrained. 
     """
+    NEW_CP = False
     def __init__(
         self,
         rank,
@@ -428,6 +429,9 @@ class Parafac2_ALS(BaseParafac2):
         self.prev_loss = loss
 
     def _update_parafac2_factors(self):
+        if self.NEW_CP:
+            self._prepare_cp_decomposer()
+
         #print('Before projection update') 
         #print(f'The MSE is {self.MSE: 4f}, f is {self.loss:4f}')
         self._update_projection_matrices()
@@ -446,9 +450,15 @@ class Parafac2_ALS(BaseParafac2):
 
     @property
     def loss(self):
-        loss = self.SSE
+        loss = self.SSE + self.regularisation_penalty
+        return loss
+    
+    @property
+    def regularisation_penalty(self):
+        reg_penalty = 0
         if self.ridge_penalties is not None:
             factor_matrices = [self.decomposition.A, self.decomposition.blueprint_B, self.decomposition.C]
             for factor, penalty in zip(factor_matrices, self.ridge_penalties):
-                loss += penalty*np.linalg.norm(factor)**2
-        return loss
+                reg_penalty += penalty*np.linalg.norm(factor)**2
+        return reg_penalty
+
