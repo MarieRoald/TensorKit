@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod, abstractproperty
 
+import h5py
 import numpy as np
+
+from ..decompositions import EvolvingTensor
+from ...metrics import factor_match_score
 
 # TODO: More loggers
 # - gradient logger (need to implement gradient for decomposer first)
@@ -105,3 +109,150 @@ class Parafac2ErrorLogger(BaseLogger):
             self.log_metrics.append(1)
             return
         self.log_metrics.append(decomposer.parafac2_error)
+
+
+class EvolvingTensorFMSLogger(BaseLogger):
+    def __init__(self, path, internal_path=None, fms_options=None):
+        super().__init__()
+        if fms_options is None:
+            fms_options = {}
+        
+        with h5py.File(path, "r") as h5:
+            if internal_path is not None and internal_path != "":
+                h5 = h5[internal_path]
+            self.true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
+        
+        self.fms_options = fms_options
+    
+    def _log(self, decomposer):
+        fms = self.true_decomposition.factor_match_score(
+            decomposer.decomposition, **self.fms_options
+        )[0]
+        self.log_metrics.append(fms)
+
+
+class EvolvingTensorFMSALogger(BaseLogger):
+    def __init__(self, path, internal_path=None, fms_options=None):
+        super().__init__()
+        if fms_options is None:
+            fms_options = {}
+        
+        with h5py.File(path, "r") as h5:
+            if internal_path is not None and internal_path != "":
+                h5 = h5[internal_path]
+            true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
+        
+        self.true_A = true_decomposition.A
+        self.fms_options = fms_options
+    
+    def _log(self, decomposer):
+        fms = factor_match_score(
+            [self.true_A], [decomposer.decomposition.A], weight_penalty=False, **self.fms_options
+        )[0]
+        self.log_metrics.append(fms)
+
+
+class EvolvingTensorFMSBLogger(BaseLogger):
+    def __init__(self, path, internal_path=None, fms_options=None):
+        super().__init__()
+        if fms_options is None:
+            fms_options = {}
+        
+        with h5py.File(path, "r") as h5:
+            if internal_path is not None and internal_path != "":
+                h5 = h5[internal_path]
+            true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
+        
+        self.true_B = np.array(true_decomposition.B)
+        self.fms_options = fms_options
+    
+    def _log(self, decomposer):
+        B = np.array(decomposer.decomposition.B)
+        rank = B.shape[-1]
+
+        fms = factor_match_score(
+            [self.true_B.reshape(-1, rank)], [B.reshape(-1, rank)], weight_penalty=False, **self.fms_options
+        )[0]
+        self.log_metrics.append(fms)
+
+
+class EvolvingTensorFMSCLogger(BaseLogger):
+    def __init__(self, path, internal_path=None, fms_options=None):
+        super().__init__()
+        if fms_options is None:
+            fms_options = {}
+        
+        with h5py.File(path, "r") as h5:
+            if internal_path is not None and internal_path != "":
+                h5 = h5[internal_path]
+            true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
+        
+        self.true_C = true_decomposition.C
+        self.fms_options = fms_options
+    
+    def _log(self, decomposer):
+        fms = factor_match_score(
+            [self.true_C], [decomposer.decomposition.C], weight_penalty=False, **self.fms_options
+        )[0]
+        self.log_metrics.append(fms)
+
+
+class TrueEvolvingTensorFitLogger(BaseLogger):
+    def __init__(self, path, internal_path=None):
+        super().__init__()
+        with h5py.File(path, "r") as h5:
+            if internal_path is not None and internal_path != "":
+                h5 = h5[internal_path]
+            true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
+        self.true_tensor = true_decomposition.construct_tensor()
+    
+    def _log(self, decomposer):
+        X = decomposer.decomposition.construct_tensor()
+        SSE = np.linalg.norm(X - self.true_tensor)**2
+        SS_true_target = np.linalg.norm(self.true_tensor)**2
+        fit = 1 - SSE/SS_true_target
+
+        self.log_metrics.append(fit)
+
+
+class Parafac2ADMMDualNormLogger(BaseLogger):
+    def __init__(self, no_admm_ok=False):
+        super().__init__()
+        self.no_admm_ok = no_admm_ok
+    
+    def _log(self, decomposer):
+        if not hasattr(decomposer, 'sub_problems'):
+            self.log_metrics.append(0)
+            return
+
+        admm_sub_problem = decomposer.sub_problems[1]
+        if not hasattr(admm_sub_problem, 'dual_variables'):
+            self.log_metrics.append(0)
+        
+        dual_norm = np.linalg.norm(admm_sub_problem.dual_variables)
+        self.log_metrics.append(dual_norm)
+
+
+class Parafac2ADMMCouplingErrorLogger(BaseLogger):
+    def __init__(self, no_admm_ok=False):
+        super().__init__()
+        self.no_admm_ok = no_admm_ok
+    
+    def _log(self, decomposer):
+        if not hasattr(decomposer, 'sub_problems'):
+            self.log_metrics.append(0)
+            return
+
+        admm_sub_problem = decomposer.sub_problems[1]
+        if not hasattr(admm_sub_problem, 'dual_variables'):
+            self.log_metrics.append(0)
+        
+        aux_Bs = admm_sub_problem.aux_fms
+        Bs = decomposer.decomposition.B
+
+        coupling_error = np.linalg.norm([
+            np.linalg.norm(aux_B - B) for aux_B, B in zip(aux_Bs, Bs)
+        ])
+        self.log_metrics.append(coupling_error)
+
+
