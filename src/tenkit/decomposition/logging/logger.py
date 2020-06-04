@@ -216,9 +216,9 @@ class TrueEvolvingTensorFitLogger(BaseLogger):
 
 
 class Parafac2ADMMDualNormLogger(BaseLogger):
-    def __init__(self, no_admm_ok=False):
+    def __init__(self, not_admm_ok=False):
         super().__init__()
-        self.no_admm_ok = no_admm_ok
+        self.not_admm_ok = not_admm_ok
     
     def _log(self, decomposer):
         if not hasattr(decomposer, 'sub_problems'):
@@ -234,9 +234,9 @@ class Parafac2ADMMDualNormLogger(BaseLogger):
 
 
 class Parafac2ADMMCouplingErrorLogger(BaseLogger):
-    def __init__(self, no_admm_ok=False):
+    def __init__(self, not_admm_ok=False):
         super().__init__()
-        self.no_admm_ok = no_admm_ok
+        self.not_admm_ok = not_admm_ok
     
     def _log(self, decomposer):
         if not hasattr(decomposer, 'sub_problems'):
