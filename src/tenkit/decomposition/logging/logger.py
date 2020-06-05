@@ -221,13 +221,14 @@ class Parafac2ADMMDualNormLogger(BaseLogger):
         self.not_admm_ok = not_admm_ok
     
     def _log(self, decomposer):
-        if not hasattr(decomposer, 'sub_problems'):
+        if self.not_admm_ok and not hasattr(decomposer, 'sub_problems'):
             self.log_metrics.append(0)
             return
 
         admm_sub_problem = decomposer.sub_problems[1]
-        if not hasattr(admm_sub_problem, 'dual_variables'):
+        if self.not_admm_ok and not hasattr(admm_sub_problem, 'dual_variables'):
             self.log_metrics.append(0)
+            return
         
         dual_norm = np.linalg.norm(admm_sub_problem.dual_variables)
         self.log_metrics.append(dual_norm)
@@ -239,13 +240,14 @@ class Parafac2ADMMCouplingErrorLogger(BaseLogger):
         self.not_admm_ok = not_admm_ok
     
     def _log(self, decomposer):
-        if not hasattr(decomposer, 'sub_problems'):
+        if self.not_admm_ok and not hasattr(decomposer, 'sub_problems'):
             self.log_metrics.append(0)
             return
 
         admm_sub_problem = decomposer.sub_problems[1]
-        if not hasattr(admm_sub_problem, 'dual_variables'):
+        if self.not_admm_ok and not hasattr(admm_sub_problem, 'aux_fms'):
             self.log_metrics.append(0)
+            return
         
         aux_Bs = admm_sub_problem.aux_fms
         Bs = decomposer.decomposition.B
