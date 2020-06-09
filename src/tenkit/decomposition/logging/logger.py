@@ -146,8 +146,11 @@ class EvolvingTensorFMSALogger(BaseLogger):
         self.fms_options = fms_options
     
     def _log(self, decomposer):
+        decomposition = EvolvingTensor.from_kruskaltensor(
+            decomposer.decomposition, allow_same_class=True
+        )
         fms = factor_match_score(
-            [self.true_A], [decomposer.decomposition.A], weight_penalty=False, **self.fms_options
+            [self.true_A], [decomposition.A], weight_penalty=False, **self.fms_options
         )[0]
         self.log_metrics.append(fms)
 
@@ -167,7 +170,10 @@ class EvolvingTensorFMSBLogger(BaseLogger):
         self.fms_options = fms_options
     
     def _log(self, decomposer):
-        B = np.array(decomposer.decomposition.B)
+        decomposition = EvolvingTensor.from_kruskaltensor(
+            decomposer.decomposition, allow_same_class=True
+        )
+        B = np.array(decomposition.B)
         rank = B.shape[-1]
 
         fms = factor_match_score(
@@ -191,8 +197,11 @@ class EvolvingTensorFMSCLogger(BaseLogger):
         self.fms_options = fms_options
     
     def _log(self, decomposer):
+        decomposition = EvolvingTensor.from_kruskaltensor(
+            decomposer.decomposition, allow_same_class=True
+        )
         fms = factor_match_score(
-            [self.true_C], [decomposer.decomposition.C], weight_penalty=False, **self.fms_options
+            [self.true_C], [decomposition.C], weight_penalty=False, **self.fms_options
         )[0]
         self.log_metrics.append(fms)
 
