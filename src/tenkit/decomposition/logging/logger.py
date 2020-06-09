@@ -125,8 +125,11 @@ class EvolvingTensorFMSLogger(BaseLogger):
         self.fms_options = fms_options
     
     def _log(self, decomposer):
+        decomposition = EvolvingTensor.from_kruskaltensor(
+            decomposer.decomposition, allow_same_class=True
+        )
         fms = self.true_decomposition.factor_match_score(
-            decomposer.decomposition, **self.fms_options
+            decomposition, **self.fms_options
         )[0]
         self.log_metrics.append(fms)
 
