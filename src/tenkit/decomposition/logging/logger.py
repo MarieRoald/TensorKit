@@ -209,6 +209,36 @@ class EvolvingTensorFMSCLogger(BaseLogger):
         self.log_metrics.append(fms)
 
 
+class EvolvingTensorFMSBCLogger(BaseLogger):
+    def __init__(self, path, internal_path=None, fms_options=None):
+        super().__init__()
+        if fms_options is None:
+            fms_options = {}
+        
+        with h5py.File(path, "r") as h5:
+            if internal_path is not None and internal_path != "":
+                h5 = h5[internal_path]
+            true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
+        
+        true_B = np.array(true_decomposition.B)
+        true_C = true_decomposition.C
+        self.true_BC = true_B*true_C[:, np.newaxis]
+        self.fms_options = fms_options
+    
+    def _log(self, decomposer):
+        decomposition = EvolvingTensor.from_kruskaltensor(
+            decomposer.decomposition, allow_same_class=True
+        )
+        B = np.array(decomposition.B)
+        BC = B*decomposition.C[:, np.newaxis]
+        rank = BC.shape[-1]
+
+        fms = factor_match_score(
+            [self.true_BC.reshape(-1, rank)], [BC.reshape(-1, rank)], weight_penalty=False, **self.fms_options
+        )[0]
+        self.log_metrics.append(fms)
+
+
 class TrueEvolvingTensorFitLogger(BaseLogger):
     def __init__(self, path, internal_path=None):
         super().__init__()
