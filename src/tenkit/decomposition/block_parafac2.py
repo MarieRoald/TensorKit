@@ -37,6 +37,11 @@ class BaseSubProblem:
         return 0
 
 
+class NotUpdating(BaseSubProblem):
+    def update_decomposition(self, X, decomposition):
+        pass
+
+
 class RLS(BaseSubProblem):
     def __init__(self, mode, ridge_penalty=0, non_negativity=False):
         self.ridge_penalty = ridge_penalty
@@ -621,15 +626,13 @@ class BlockParafac2(BaseDecomposer):
                 break
 
             self._update_parafac2_factors()
+            self._after_fit_iteration()
 
             if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
                 rel_change = np.asscalar(np.array(self._rel_function_change))
 
                 print(f'{self.current_iteration:6d}: The MSE is {self.MSE:4g}, f is {np.asscalar(self.loss):4g}, '
                       f'improvement is {rel_change:g}')
-
-            self._after_fit_iteration()
-
 
         if (
             ((self.current_iteration+1) % self.checkpoint_frequency != 0) and 
@@ -651,6 +654,7 @@ class BlockParafac2(BaseDecomposer):
             loss = self.loss
             tol = (1 - self.convergence_tol)**self.convergence_check_frequency
             has_converged = loss >= tol*self.prev_loss
+
             self._rel_function_change = (self.prev_loss - loss)/self.prev_loss
             self.prev_loss = loss
         return has_converged
