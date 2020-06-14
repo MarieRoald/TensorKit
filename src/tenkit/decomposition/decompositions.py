@@ -218,10 +218,11 @@ class KruskalTensor(BaseDecomposedTensor):
                                           weight_penalty=weight_penalty, 
                                           fms_reduction=fms_reduction)
     
-    def seperate_mode_factor_match_score(self, decomposition, fms_reduction='min'):
-        return metrics.seperate_mode_factor_match_score(self.factor_matrices,
+    def separate_mode_factor_match_score(self, decomposition, fms_reduction='min'):
+        return metrics.separate_mode_factor_match_score(self.factor_matrices,
                                                         decomposition.factor_matrices, 
                                                         fms_reduction=fms_reduction)
+ 
     def get_sign_scores(self, X):
         sign_scores = []
         for n, factor_matrix in enumerate(self.factor_matrices):
@@ -690,6 +691,7 @@ class Parafac2Tensor(EvolvingTensor):
         
         return cls(A, blueprint_B, C, projection_matrices)
 
+    @classmethod
     def random_init_nn(cls, sizes, rank):
         if isinstance(sizes[1], int):
             all_same_size = True
