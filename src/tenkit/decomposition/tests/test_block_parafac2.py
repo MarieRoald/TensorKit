@@ -217,7 +217,7 @@ class TestParafac2ADMMSubproblem(BaseTestParafac2Subproblem):
             return smooth_admm.regulariser(x) + (rho/2)*np.sum((x - B)**2)
         
         deriv = approx_fprime(B2.ravel(), loss, 1e-10)
-        assert np.linalg.norm(deriv, np.inf) < 1e-3
+        assert np.linalg.norm(deriv, np.inf) < 1e-5
 
 class TestBlockParafac2:
     @pytest.fixture
