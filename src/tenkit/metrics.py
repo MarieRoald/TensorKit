@@ -16,6 +16,7 @@ def _tucker_congruence(A1, A2):
     A2_normalised = A2/np.linalg.norm(A2, axis=0)
     return A1_normalised.T@A2_normalised                             
 
+
 def _factor_match_score(true_factors, estimated_factors, weight_penalty=True, nonnegative=True):
 
     if len(true_factors[0].shape) == 1:
@@ -49,6 +50,7 @@ def _factor_match_score(true_factors, estimated_factors, weight_penalty=True, no
         scores.append(score)
     return scores
 
+
 def factor_match_score(
     true_factors, estimated_factors, weight_penalty=True, fms_reduction="min"
 ):
@@ -78,6 +80,7 @@ def factor_match_score(
             max_fms = fms
             best_permutation = permutation
     return max_fms, best_permutation
+
 
 def separate_mode_factor_match_score(true_factors, estimated_factors, fms_reduction='min'):
     if fms_reduction == "min":
@@ -115,11 +118,11 @@ def separate_mode_factor_match_score(true_factors, estimated_factors, fms_reduct
     return max_fms, best_permutation
 
 
-
 def tensor_completion_score(X, X_hat, W):
     return np.linalg.norm((1 - W) * (X - X_hat)) / np.linalg.norm((1 - W) * X)
 
 
+# TODO: Make general over B?
 def core_consistency(X, A, B, C, normalized=False):
     # TODO: generalise to more than three modes
     F = A.shape[1]
@@ -154,7 +157,6 @@ def core_consistency(X, A, B, C, normalized=False):
     return np.squeeze(100*(1-sum((vec_G-vec_T)**2)/denom))
 
 
-
 def core_consistency_parafac2(X, P_k, A, F, C):
     rank = F.shape[1]
     I = A.shape[0]
@@ -167,7 +169,7 @@ def core_consistency_parafac2(X, P_k, A, F, C):
     return core_consistency(projected_X, A, F, C)
 
 
-
+# TODO: DELETE?
 """
 def calculate_core_consistencies(X, upper_rank=5):
     core_consistencies = []
@@ -188,7 +190,6 @@ def leverage(factor_matrix):
 
 
 def _factor_match_score_parafac2(true_factors, estimated_factors, weight_penalty=True, nonnegative=True):
-
     if len(true_factors[0].shape) == 1:
         true_factors = [factor.reshape(-1,1) for factor in true_factors]
     if len(estimated_factors[0].shape) == 1:
