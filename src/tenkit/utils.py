@@ -22,21 +22,20 @@ def flip_factors(factor_matrices):
 
 
 def get_pca_loadings(Y, rank):
-    """Returns the pca loadings of the Y matrix.
+    """Returns the PCA loadings of the Y matrix.
     """
     U, S, Vh = np.linalg.svd(Y)
     A = (Vh.T @ np.diag(S))[:, :rank]
     return A
 
 
-
-
+# TODO: DELETE?
 def create_random_factors(sizes, rank):
     factors = [np.random.randn(size, rank) for size in sizes]
     factors, norms = normalize_factors(factors)
     return factors, norms
 
-
+# TODO: DELETE?
 def create_data(sizes, rank, noise_factor=0):
     factors, norms = create_random_factors(sizes=sizes, rank=rank)
     tensor = base.ktensor(*tuple(factors))
@@ -49,12 +48,14 @@ def create_data(sizes, rank, noise_factor=0):
     return tensor, factors, norms, noise
 
 
+# TODO: DELETE?
 def create_random_uniform_factors(sizes, rank):
     factors = [np.random.uniform(size=(size, rank)) for size in sizes]
     factors, norms = normalize_factors(factors)
     return factors, norms
 
 
+# TODO: DELETE?
 def create_non_negative_data(sizes, rank, noise_factor=0):
     factors, norms = create_random_uniform_factors(sizes=sizes, rank=rank)
     tensor = base.ktensor(*tuple(factors))
@@ -71,6 +72,7 @@ def permute_factors(permutation, factors):
     return [factor[:, permutation] for factor in factors]
 
 
+# TODO: DELETE?
 def permute_factors_and_weights(permutation, factors, weights):
     permuted_factors = [factor[:, permutation] for factor in factors]
     permuted_weights = weights[list(permutation)]
@@ -126,6 +128,7 @@ def normalize_factors(factors):
     return normalized_factors, norms
 
 
+# TODO: DELETE?
 def _find_first_nonzero_sign(factor):
     """Returns the sign of the first nonzero element of `factor`
     """
@@ -138,6 +141,7 @@ def _find_first_nonzero_sign(factor):
     return sign
 
 
+# TODO: DELETE?
 def prepare_for_comparison(factors):
     """Normalize factors and flip the signs.
 
@@ -189,24 +193,30 @@ def get_signs(factor_matrix, X):
     )
 
     return np.sign(sign_weight), sign_weight
-    
+
+
+# TODO: Evolving tensor metode?
 def signfix_evolving_factors(data_tensor, evolving_factor, evolve_over_factor, data_driven=True):
     fixed_evolving_factor = evolving_factor.copy()
     fixed_evolve_over_factor = evolve_over_factor.copy()
     for k in range(len(evolving_factor)):
         signs = get_signs(data_tensor[k], evolving_factor[k], data_driven=data_driven)[0]
-        
+
         fixed_evolving_factor[k] *= signs
         fixed_evolve_over_factor[k] *= signs
-    
+
     return fixed_evolving_factor, fixed_evolve_over_factor
 
+
+# TODO: Denne funker ikke lengre en gang?
 def signfix_normal_factors(data_tensor, fixing_factors, flipping_factors, data_driven=True):
     unfolded_data_tensor = data_tensor.reshape(data_tensor.shape[0], -1)
     signs = get_signs(unfolded_data_tensor, fixing_factors, data_driven)[0]
-    
+
     return fixing_factors*signs[np.newaxis], flipping_factors*signs[np.newaxis]
 
+
+# TODO: Evolving tensor metode?
 def fix_signs_evolving_tensor(evolving_tensor, data_tensor):
     evolving_factor = evolving_tensor.B
     evolve_over_factor = evolving_tensor.C
@@ -218,6 +228,7 @@ def fix_signs_evolving_tensor(evolving_tensor, data_tensor):
     fixed_evolving_tensor._B = fixed_evolving_factor
     fixed_evolving_tensor._C = fixed_evolve_over_factor
     return fixed_evolving_tensor
+
 
 def iter_checkpoints(h5_checkpoint_file):
     for groupname in sorted(h5_checkpoint_file):
