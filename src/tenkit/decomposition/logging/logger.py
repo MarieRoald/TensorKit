@@ -129,7 +129,7 @@ class EvolvingTensorFMSLogger(BaseLogger):
             decomposer.decomposition, allow_same_class=True
         )
         fms = self.true_decomposition.factor_match_score(
-            decomposition, **self.fms_options
+            decomposition, **self.fms_options, weight_penalty=False
         )[0]
         self.log_metrics.append(fms)
 
