@@ -19,6 +19,7 @@ from .base_decomposer import BaseDecomposer
 from . import decompositions
 from .. import utils
 from .utils import quadratic_form_trace
+from ._tv_prox import TotalVariation
 
 
 # Default callback
@@ -218,21 +219,10 @@ def safe_factor_solve(factor, x):
 
 
 def evolving_factor_total_variation(factor):
-    factor_diff = factor[:, 1:] - factor[:, :-1]
-    return np.linalg.norm(factor_diff.ravel(), 1)
+    return TotalVariation(factor, 1).center_penalty()
 
-@ignore_warnings(category=ConvergenceWarning)
 def total_variation_prox(factor, strength):
-    J, rank = factor.shape
-    integration_matrix = np.tril(np.ones((J, J-1)), -1)
-
-
-    lasso = Lasso(alpha=strength, max_iter=1000, selection='random')
-    lasso.fit(integration_matrix, factor)
-
-    new_factor = integration_matrix@lasso.coef_.T + lasso.intercept_
-    assert new_factor.shape == factor.shape
-    return new_factor
+    return TotalVariation(factor, strength).prox()
 
 
 class Parafac2ADMM(BaseParafac2SubProblem):
@@ -384,19 +374,31 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         init_P, init_B = decomposition.projection_matrices, decomposition.blueprint_B
         B = [P_k@init_B for P_k in init_P]
         return [
-            self.constraint_prox(B_k, decomposition, k) for k, B_k in enumerate(B)
+            self.constraint_prox(B_k, decomposition) for k, B_k in enumerate(B)
         ]
 
     def compute_next_aux_fms(self, decomposition, dual_variables):
         projections = decomposition.projection_matrices
         blueprint_B = decomposition.blueprint_B
+        rank = blueprint_B.shape[1]
         return [
             self.constraint_prox(
-                P_k@blueprint_B + dual_variables[k], decomposition, k
+                P_k@blueprint_B + dual_variables[k], decomposition,
             ) for k, P_k in enumerate(projections)
         ]
+        
+        Bks = [P_k@blueprint_B for P_k in projections]
+        Bks = np.concatenate(Bks, axis=1)
+        dual_variables = np.concatenate([dual_variable for dual_variable in dual_variables], axis=1)
+
+        proxed = self.constraint_prox(Bks + dual_variables, decomposition)
+        return [
+            proxed[:, k*rank:(k+1)*rank] for k, _ in enumerate(projections)
+        ]
+
+
     
-    def constraint_prox(self, x, decomposition, k):
+    def constraint_prox(self, x, decomposition):
         if self.non_negativity and self.l1_penalty:
             return np.maximum(x - 2*self.l1_penalty/self.rho, 0)
         elif self.tv_penalty:
