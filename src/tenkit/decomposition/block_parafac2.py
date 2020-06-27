@@ -491,23 +491,23 @@ class Parafac2ADMM(BaseParafac2SubProblem):
     def compute_projected_X(self, projection_matrices, X, out=None):
         return compute_projected_X(projection_matrices, X, out=out)
 
-    def _compute_relative_duality_gap(self, fms, aux_fms):
+    def _compute_relative_coupling_error(self, fms, aux_fms):
         gap_sq = sum(np.linalg.norm(fm - aux_fm)**2 for fm, aux_fm in zip(fms, aux_fms))
         aux_norm_sq = sum(np.linalg.norm(aux_fm)**2 for aux_fm in aux_fms)
         return gap_sq/aux_norm_sq
 
     def has_converged(self, decomposition, aux_fms, old_aux_fms, dual_variables):
-        duality_gap = self._compute_relative_duality_gap(decomposition.B, aux_fms)
+        coupling_error = self._compute_relative_coupling_error(decomposition.B, aux_fms)
         aux_change_sq = sum(
             np.linalg.norm(aux_fm - old_aux_fm)**2 for aux_fm, old_aux_fm in zip(aux_fms, old_aux_fms)
         )
         dual_var_norm_sq = sum(np.linalg.norm(dual_var)**2 for dual_var in dual_variables)
         aux_change_criterion = (aux_change_sq + 1e-16) / (dual_var_norm_sq + 1e-16)
         if self.verbose:
-            print("primal criteria", duality_gap, "dual criteria", aux_change_sq)
+            print("primal criteria", coupling_error, "dual criteria", aux_change_sq)
 
         
-        return duality_gap < self.tol and aux_change_criterion < self.tol
+        return coupling_error < self.tol and aux_change_criterion < self.tol
     
     def regulariser(self, factor_matrices):
         reg = 0
@@ -530,6 +530,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
                 if k < len(factor_matrices) - 1:
                     reg += self.temporal_similarity*(np.linalg.norm(B_k - factor_matrices[k+1])**2)
         return reg
+    
         
 
 class FlexibleParafac2ADMM(BaseParafac2SubProblem):
@@ -652,13 +653,44 @@ class BlockParafac2(BaseDecomposer):
 
     def _has_converged(self):
         has_converged = False
-        if self.current_iteration % self.convergence_check_frequency == 0 and self.current_iteration > 0:
+
+        should_check_convergence = self.current_iteration % self.convergence_check_frequency == 0
+        if should_check_convergence and self.current_iteration > 0:
+            sse = self.SSE
+            reg = self.regularisation_penalty
             loss = self.loss
-            tol = (1 - self.convergence_tol)**self.convergence_check_frequency
-            has_converged = loss >= tol*self.prev_loss
+            if hasattr(self.sub_problems[1], "_compute_relative_coupling_error"):
+                rel_coupling = self.sub_problems[1]._compute_relative_coupling_error(
+                    self.decomposition.B,
+                    self.sub_problems[1].aux_fms
+                )
+            else:
+                rel_coupling = 0
+
+            is_first_it = (self.prev_sse is None)
 
             self._rel_function_change = (self.prev_loss - loss)/self.prev_loss
             self.prev_loss = loss
+            self.prev_reg = reg
+            self.prev_sse = sse
+            self.prev_rel_coupling = rel_coupling
+
+            if is_first_it:
+                return False
+
+            # Convergence if 
+            # (prev - curr)/prev < tol
+            # prev - curr < prev*tol
+            # prev - prev*tol - curr < 0
+            # (1 - tol)prev - curr < 0
+            # (1 - tol)prev < curr
+            tol = (1 - self.convergence_tol)**self.convergence_check_frequency
+            has_converged = (sse >= tol*self.prev_sse) and (reg >= tol*self.prev_reg)
+            has_converged = has_converged and (rel_coupling >= tol*self.prev_rel_coupling)
+            self.prev_rel_coupling = rel_coupling
+
+
+
         return has_converged
 
     def _init_fit(self, X, max_its, initial_decomposition):
@@ -668,6 +700,9 @@ class BlockParafac2(BaseDecomposer):
         )
         self.projected_X = compute_projected_X(self.decomposition.projection_matrices, self.X)
         self.prev_loss = self.loss
+        self.prev_sse = None
+        self.prev_reg = None
+        self.prev_rel_coupling = None
         self._rel_function_change = np.inf
     
     def init_random(self):
