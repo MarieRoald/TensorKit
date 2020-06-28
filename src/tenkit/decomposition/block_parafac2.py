@@ -556,6 +556,7 @@ class BlockParafac2(BaseDecomposer):
         print_frequency=None,
         projection_update_frequency=5,
         convergence_check_frequency=1,
+        normalize_B=False
     ):
         if (
             not hasattr(sub_problems[1], '_is_pf2_evolving_mode') or 
@@ -579,6 +580,7 @@ class BlockParafac2(BaseDecomposer):
         self.init = init
         self.projection_update_frequency = projection_update_frequency
         self.convergence_check_frequency = convergence_check_frequency
+        self.normalize_B = normalize_B
 
     def _check_valid_components(self, decomposition):
         return BaseParafac2._check_valid_components(self, decomposition)
@@ -609,6 +611,11 @@ class BlockParafac2(BaseDecomposer):
         # The function below updates the decomposition and the projected X inplace.
         # print(f'Before {self.current_iteration:6d}A: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
         #               f'improvement is {self._rel_function_change:g}')
+        if self.normalize_B:
+            norms = np.linalg.norm(self.decomposition.blueprint_B, axis=0, keepdims=True)
+            self.decomposition.blueprint_B /= norms
+            self.decomposition.C *= norms
+            
         decomposition = self.decomposition
         self.sub_problems[1].update_decomposition(
             self.X, self.decomposition, self.projected_X, should_update_projections=should_update_projections
