@@ -221,7 +221,6 @@ def safe_factor_solve(factor, x):
 def evolving_factor_total_variation(factor):
     return TotalVariation(factor, 1).center_penalty()
 
-
 def total_variation_prox(factor, strength):
     return TotalVariation(factor, strength).prox()
 
@@ -382,6 +381,11 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         projections = decomposition.projection_matrices
         blueprint_B = decomposition.blueprint_B
         rank = blueprint_B.shape[1]
+        return [
+            self.constraint_prox(
+                P_k@blueprint_B + dual_variables[k], decomposition,
+            ) for k, P_k in enumerate(projections)
+        ]
         
         Bks = [P_k@blueprint_B for P_k in projections]
         Bks = np.concatenate(Bks, axis=1)
@@ -393,11 +397,6 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         ]
 
 
-        return [
-            self.constraint_prox(
-                P_k@blueprint_B + dual_variables[k], decomposition,
-            ) for k, P_k in enumerate(projections)
-        ]
     
     def constraint_prox(self, x, decomposition):
         if self.non_negativity and self.l1_penalty:
