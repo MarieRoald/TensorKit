@@ -533,13 +533,13 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         return reg
     
         
-
 class FlexibleParafac2ADMM(BaseParafac2SubProblem):
     def __init__(self, non_negativity=True):
         self.non_negativity = non_negativity
 
     def update_decomposition(self,  X, decomposition, projected_X, update_projections):
         pass
+
 
 class BlockParafac2(BaseDecomposer):
     DecompositionType = decompositions.Parafac2Tensor
@@ -613,8 +613,8 @@ class BlockParafac2(BaseDecomposer):
         #               f'improvement is {self._rel_function_change:g}')
         if self.normalize_B:
             norms = np.linalg.norm(self.decomposition.blueprint_B, axis=0, keepdims=True)
-            self.decomposition.blueprint_B /= norms
-            self.decomposition.C *= norms
+            self.decomposition.blueprint_B[:] = self.decomposition.blueprint_B/norms
+            self.decomposition.C[:] = self.decomposition.C*norms
             
         decomposition = self.decomposition
         self.sub_problems[1].update_decomposition(
