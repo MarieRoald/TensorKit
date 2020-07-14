@@ -1,12 +1,14 @@
 from copy import copy
 from pathlib import Path
 import h5py
+from warnings import warn
     
 import numpy as np
 import scipy.linalg as sla
 import scipy.sparse.linalg as spla
 import scipy.sparse as sparse
 from sklearn.linear_model import Lasso
+import pyamg
 
 from sklearn.utils.testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
@@ -204,22 +206,66 @@ class Parafac2RLS(BaseParafac2SubProblem):
         return RLS._get_rightsolve(self)
 
 
-def safe_factorise(array):
-    if sparse.issparse(array):
-        return spla.splu(array)
-    else:
-        return sla.cho_factor(array)
+class _SmartSymmetricSolver:
+    """Utility for when the same symmetric system will be solved many times.
+    """
+    def __init__(self, system_of_eqs, method=None):
+        if method is None and sparse.issparse(system_of_eqs):
+            method = "lu"
+        elif method is None:
+            method = "chol"
+        
+        method = method.lower()
 
+        if (not sparse.issparse(system_of_eqs)) and (method in {"lu", "ilu", "amg", "amg_cg"}):
+            warn(f"'{method}'' is not supported for dense matrices, resolving to 'chol'")
 
-def safe_factor_solve(factor, x):
-    if isinstance(factor, spla.SuperLU):
-        return factor.solve(x)
-    else:
-        return sla.cho_solve(factor, x)
+        if method == "amg":
+            system_of_eqs = sparse.csr_matrix(system_of_eqs)
+            self.amg_grid = pyamg.smoothed_aggregation_solver(system_of_eqs)
+        elif method == "amg_cg":
+            system_of_eqs = sparse.csr_matrix(system_of_eqs)
+            self.preconditioner = pyamg.smoothed_aggregation_solver(system_of_eqs).aspreconditioner()
+        elif method == "lu":
+            self.lu = spla.splu(system_of_eqs)
+        elif method == "ilu_cg":
+            self.spilu = spla.spilu(system_of_eqs)
+            self.preconditioner = spla.LinearOperator(system_of_eqs.shape, lambda x: self.spilu.solve(x))
+        elif method == "chol":
+            self.chol = sla.cho_factor(system_of_eqs)
+        elif method == "cg":
+            self.preconditioner = None
+        else:
+            raise ValueError(f"Unsupported method {method}")
+        
+        self.system_of_eqs = system_of_eqs
+        self.method = method
+    
+    def solve(self, x):
+        if self.method == "chol":
+            return sla.cho_solve(self.chol, x)
+        elif self.method == "lu":
+            return self.lu.solve(x)
+        elif self.method in {"cg", "amg_cg", "ilu_cg"}:
+            if x.ndim > 1:
+                return np.stack(
+                    [self.solve(x[..., i]) for i in range(x.shape[-1])],
+                    axis=-1
+                )
+            return spla.cg(self.system_of_eqs, x, M=self.preconditioner, tol=1e-10, maxiter=20)[0]
+        elif self.method == "amg":
+            if x.ndim > 1:
+                return np.stack(
+                    [self.solve(x[..., i]) for i in range(x.shape[-1])],
+                    axis=-1
+                )
+                
+            return self.amg_grid.solve(x, tol=1e-10)
 
 
 def evolving_factor_total_variation(factor):
     return TotalVariation(factor, 1).center_penalty()
+
 
 def total_variation_prox(factor, strength):
     return TotalVariation(factor, strength).prox()
@@ -251,6 +297,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         num_it_converge_at=30,
         num_it_converge_to=5,
         cache_components=True,
+        l2_solve_method=None
     ):
         if rho is None:
             self.auto_rho = True
@@ -271,6 +318,8 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self.tv_penalty = tv_penalty
         self.temporal_similarity = temporal_similarity
 
+        self.l2_solve_method = l2_solve_method
+
         if self.temporal_similarity > 0:
             raise RuntimeError("This doesn't work")
 
@@ -280,10 +329,10 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             raise ValueError("Not implemented non negative similarity")
         if l2_similarity is not None and l1_penalty:
             raise ValueError("Not implemented L1+L2 with similarity")
-
+        
         self.verbose = verbose
         self._qr_cache = None
-        self._reg_factor_cache = None
+        self._reg_solver = None
         self.dual_variables = None
         self.aux_fms = None
         self.it_num = 0
@@ -315,7 +364,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
     ):
         # Clear caches
         self._qr_cache = None
-        self._reg_factor_cache = None
+        self._reg_solver = None
 
         # Compute rho
         if self.auto_rho:
@@ -396,8 +445,6 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             proxed[:, k*rank:(k+1)*rank] for k, _ in enumerate(projections)
         ]
 
-
-    
     def constraint_prox(self, x, decomposition):
         if self.non_negativity and self.l1_penalty:
             return np.maximum(x - 2*self.l1_penalty/self.rho, 0)
@@ -408,49 +455,30 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         elif self.l1_penalty:
             return np.sign(x)*np.maximum(np.abs(x) - 2*self.l1_penalty/self.rho, 0)
         elif self.l2_similarity is not None:
-            similar_to=0
-            step_length=0
-            # if k == 0:
-            #     step_length = 1
-            #     similar_to = decomposition.B[k+1]
-            # elif k == (decomposition.shape[2] - 1):
-            #     step_length = 1
-            #     similar_to = decomposition.B[k-1]
-            # else:
-            #     step_length = 2
-            #     similar_to = decomposition.B[k-1] + decomposition.B[k+1]
+            if self._reg_solver is None:
+                if sparse.issparse(self.l2_similarity):
+                    I = sparse.eye(self.l2_similarity.shape[0])
+                else:
+                    I = np.identity(self.l2_similarity.shape[0])
+                reg_matrix = self.l2_similarity + 0.5*self.rho*I
 
+                self._reg_solver = _SmartSymmetricSolver(reg_matrix, method=self.l2_solve_method)
 
-            if self.SKIP_CACHE:
-                I = np.identity(self.l2_similarity.shape[0])
-                reg_matrix = self.l2_similarity + (0.5*self.rho + self.temporal_similarity*step_length)*I
-                return np.linalg.solve(reg_matrix, 0.5*self.rho*x + self.temporal_similarity*similar_to)
-
-            if self._reg_factor_cache is None:
-                I = np.identity(self.l2_similarity.shape[0])
-                reg_matrix = self.l2_similarity + (0.5*self.rho + self.temporal_similarity*step_length)*I
-
-                factor = safe_factorise(sparse.csc_matrix(reg_matrix))
-                self._reg_factor_cache = factor
-            else:
-                factor = self._reg_factor_cache
-            
-            rhs = 0.5*self.rho*x + self.temporal_similarity*similar_to
-            return safe_factor_solve(factor, rhs)
+            rhs = 0.5*self.rho*x
+            return self._reg_solver.solve(rhs)
         else:
             return x
 
     def update_dual(self, decomposition, aux_fms, dual_variables):
         for P_k, aux_fm, dual_variable in zip(decomposition.projection_matrices, aux_fms, dual_variables):
             B_k = P_k@decomposition.blueprint_B
-            dual_variable += B_k - aux_fm  # TODO: Look at this one a bit more
+            dual_variable += B_k - aux_fm
 
     def update_projections(self, X, decomposition, aux_fms, dual_variable):
         # Triangle equation from notes
         A = decomposition.A
         blueprint_B = decomposition.blueprint_B
         C = decomposition.C
-        # TODO: randomise order
         for k, X_k in enumerate(X):
             unreg_lhs = (A*C[k])@(blueprint_B.T)
             reg_lhs = np.sqrt(self.rho/2)*(blueprint_B.T)
