@@ -1,6 +1,7 @@
 from copy import copy
 from pathlib import Path
 import h5py
+from textwrap import dedent
 from warnings import warn
     
 import numpy as np
@@ -209,7 +210,15 @@ class Parafac2RLS(BaseParafac2SubProblem):
 class _SmartSymmetricSolver:
     """Utility for when the same symmetric system will be solved many times.
     """
+    supported_sparse = {"lu", "ilu", "amg", "amg_cg", "cg"}
+    supported_dense = {"chol"}
     def __init__(self, system_of_eqs, method=None):
+        """
+
+        Arguments
+        ---------
+
+        """
         if method is None and sparse.issparse(system_of_eqs):
             method = "lu"
         elif method is None:
@@ -217,8 +226,8 @@ class _SmartSymmetricSolver:
         
         method = method.lower()
 
-        if (not sparse.issparse(system_of_eqs)) and (method in {"lu", "ilu", "amg", "amg_cg"}):
-            warn(f"'{method}'' is not supported for dense matrices, resolving to 'chol'")
+        if (not sparse.issparse(system_of_eqs)) and (method not in self.supported_dense):
+            warn(f"'{method}' is not supported for dense matrices. Resolving to 'chol'.")
 
         if method == "amg":
             system_of_eqs = sparse.csr_matrix(system_of_eqs)
@@ -236,7 +245,13 @@ class _SmartSymmetricSolver:
         elif method == "cg":
             self.preconditioner = None
         else:
-            raise ValueError(f"Unsupported method {method}")
+            raise ValueError(dedent(
+                f"""\
+                Unsupported method {method}
+                  * For dense matrices, choose one of {self.supported_dense}
+                  * For sparse matrices, choose one of {self.supported_sparse}
+                """
+            ))
         
         self.system_of_eqs = system_of_eqs
         self.method = method
