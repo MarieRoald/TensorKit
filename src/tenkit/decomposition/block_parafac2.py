@@ -312,7 +312,8 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         num_it_converge_at=30,
         num_it_converge_to=5,
         cache_components=True,
-        l2_solve_method=None
+        l2_solve_method=None,
+        normalize_aux=False,
     ):
         if rho is None:
             self.auto_rho = True
@@ -351,6 +352,7 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self.dual_variables = None
         self.aux_fms = None
         self.it_num = 0
+        self.normalize_aux = normalize_aux
 
         self._cache_components = cache_components
         
@@ -390,6 +392,9 @@ class Parafac2ADMM(BaseParafac2SubProblem):
             aux_fms = self.init_constraint(decomposition)
         else:
             aux_fms = self.aux_fms
+        
+        if self.normalize_aux:
+            aux_fms = [aux_fm/np.linalg.norm(aux_fm, axis=0, keepdims=True) for aux_fm in aux_fms]
 
         # Init dual variables
         if self.dual_variables is None or self.it_num == 1 or (not self._cache_components):
