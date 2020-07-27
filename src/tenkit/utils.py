@@ -97,7 +97,10 @@ def normalize_factor(factor, eps=1e-15):
         Norms of the columns before normalization.
     """
     norms = np.linalg.norm(factor, axis=0, keepdims=True)
-    return factor / (norms + eps), norms
+    norms[norms == 0] = 1 
+    # At one point, we used eps during division, but if one component for some
+    # reason is scaled very low, then the eps will hugely affect the scaling
+    return factor / norms, norms
 
 
 def normalize_factors(factors):
