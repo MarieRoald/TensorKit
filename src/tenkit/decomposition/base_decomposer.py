@@ -184,7 +184,13 @@ class BaseDecomposer(ABC):
 
             h5.attrs['final_iteration'] = self.current_iteration
             h5.attrs['decomposition_type'] = type(self).__name__
-            checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
+            
+            checkpoint_name = f'checkpoint_{self.current_iteration:05d}'
+            if checkpoint_name in h5:
+                warn("Current checkpoint already in log file, overwriting checkpoint.")
+                checkpoint_group = h5[checkpoint_name]
+            else:
+                checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
             self.decomposition.store_in_hdf5_group(checkpoint_group)
 
             for logger in self.loggers:
