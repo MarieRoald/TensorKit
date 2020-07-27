@@ -228,7 +228,7 @@ class BaseDecomposer(ABC):
                 groups.sort()
                 for group in sorted(groups, reverse=True):
                     try:
-                        initial_decomposition = self.DecompositionType.load_from_hdf5_group(groups[-1])
+                        initial_decomposition = self.DecompositionType.load_from_hdf5_group(h5[group])
                     except KeyError:
                         pass
                     else:
