@@ -418,7 +418,7 @@ class Parafac2_ALS(BaseParafac2):
 
 
         if (
-            ((self.current_iteration+1) % self.checkpoint_frequency != 0) and 
+            ((self.current_iteration) % self.checkpoint_frequency != 0) and 
             (self.checkpoint_frequency > 0)
         ):
             self.store_checkpoint()
