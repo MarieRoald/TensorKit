@@ -219,13 +219,22 @@ class BaseDecomposer(ABC):
                 raise ValueError(f'There is no checkpoint {group_name} in {checkpoint_path}')
 
             checkpoint_group = h5[f'checkpoint_{load_it:05d}']
+            # TODO: clean this up
             try:
                 initial_decomposition = self.DecompositionType.load_from_hdf5_group(checkpoint_group)
             except KeyError:
                 warn("Crashed at final iteration, loading previous iteration")
                 groups = [g for g in h5 if "checkpoint_" in g]
                 groups.sort()
-                initial_decomposition = self.DecompositionType.load_from_hdf5_group(groups[-1])
+                for group in sorted(groups, reverse=True):
+                    try:
+                        initial_decomposition = self.DecompositionType.load_from_hdf5_group(groups[-1])
+                    except KeyError:
+                        pass
+                    else:
+                        break
+                else:
+                    raise ValueError("No valid decomposition")
 
 
         self._check_valid_components(initial_decomposition)
