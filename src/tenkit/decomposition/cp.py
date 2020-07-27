@@ -232,7 +232,6 @@ class BaseCP(BaseDecomposer):
 
     @property
     def loss(self):
-        return self.SSE
         return self.SSE + self.regularisation_penalty
    
     @property
