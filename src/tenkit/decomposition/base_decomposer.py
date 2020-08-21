@@ -175,7 +175,12 @@ class BaseDecomposer(ABC):
             self.max_its = max_its
         self._fit()
     
+    def checkpoint_callback(self):
+        return {}
+
     def store_checkpoint(self):
+        extra_params = self.checkpoint_callback()
+
         with h5py.File(self.checkpoint_path, 'a') as h5:
             if 'checkpoint_its' not in h5.attrs:
                 h5.attrs['checkpoint_its'] = [self.current_iteration]
@@ -191,7 +196,7 @@ class BaseDecomposer(ABC):
                 checkpoint_group = h5[checkpoint_name]
             else:
                 checkpoint_group = h5.create_group(f'checkpoint_{self.current_iteration:05d}')
-            self.decomposition.store_in_hdf5_group(checkpoint_group)
+            self.decomposition.store_in_hdf5_group(checkpoint_group, extra_params=extra_params)
 
             for logger in self.loggers:
                 logger.write_to_hdf5_group(h5)

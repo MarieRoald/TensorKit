@@ -39,6 +39,13 @@ class BaseSubProblem:
 
     def regulariser(self, factor) -> float:
         return 0
+    
+    @property
+    def checkpoint_params(self):
+        return {}
+
+    def load_from_hdf5_group(self, group):
+        pass
 
 
 class NotUpdating(BaseSubProblem):
@@ -258,7 +265,13 @@ class _SmartSymmetricSolver:
     
     def solve(self, x):
         if self.method == "chol":
-            return sla.cho_solve(self.chol, x)
+            try:
+                return sla.cho_solve(self.chol, x)
+            except IndexError:
+                raise IndexError(
+                f"c: {self.chol[0].shape}\n"
+                f"X: {x.shape}"
+                )
         elif self.method == "lu":
             return self.lu.solve(x)
         elif self.method in {"cg", "amg_cg", "ilu_cg"}:
@@ -314,6 +327,9 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         cache_components=True,
         l2_solve_method=None,
         normalize_aux=False,
+        normalize_other_modes=False,
+        aux_init="same",  # same or random
+        dual_init="zeros",  # zeros or random
     ):
         if rho is None:
             self.auto_rho = True
@@ -353,6 +369,10 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self.aux_fms = None
         self.it_num = 0
         self.normalize_aux = normalize_aux
+        self.normalize_other_modes = normalize_other_modes
+
+        self.aux_init = aux_init
+        self.dual_init = dual_init
 
         self._cache_components = cache_components
         
@@ -383,6 +403,10 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         self._qr_cache = None
         self._reg_solver = None
 
+        if self.normalize_other_modes:
+            decomposition.C[...] /= np.linalg.norm(decomposition.C, axis=0, keepdims=True)
+            decomposition.A[...] /= np.linalg.norm(decomposition.A, axis=0, keepdims=True)
+
         # Compute rho
         if self.auto_rho:
             self.rho, self._qr_cache = self.compute_auto_rho(decomposition)
@@ -398,7 +422,12 @@ class Parafac2ADMM(BaseParafac2SubProblem):
 
         # Init dual variables
         if self.dual_variables is None or self.it_num == 1 or (not self._cache_components):
-            dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
+            if self.dual_init == "zeros":
+                dual_variables = [np.zeros_like(aux_fm) for aux_fm in aux_fms]
+            elif self.dual_init == "random":
+                dual_variables = [np.random.standard_normal(aux_fm.shape)*np.median(np.abs(aux_fm)) for aux_fm in aux_fms]
+            else:
+                raise ValueError(f"Invalid dual init: {self.dual_init}")
         else:
             dual_variables = self.dual_variables
 
@@ -440,11 +469,18 @@ class Parafac2ADMM(BaseParafac2SubProblem):
         return rho, np.linalg.qr(lhs)
 
     def init_constraint(self, decomposition):
-        init_P, init_B = decomposition.projection_matrices, decomposition.blueprint_B
-        B = [P_k@init_B for P_k in init_P]
-        return [
-            self.constraint_prox(B_k, decomposition) for k, B_k in enumerate(B)
-        ]
+        if self.aux_init == "same":
+            init_P, init_B = decomposition.projection_matrices, decomposition.blueprint_B
+            B = [P_k@init_B for P_k in init_P]
+            return [
+                self.constraint_prox(B_k, decomposition) for k, B_k in enumerate(B)
+            ]
+        elif self.aux_init == "random":
+            B = [np.random.standard_normal(Bk.shape)*np.median(np.abs(Bk)) for Bk in decomposition.B]
+            return [self.constraint_prox(Bk, decomposition) for Bk in B]
+        else:
+            raise ValueError(f"Invalid aux init, {self.aux_init}")
+
 
     def compute_next_aux_fms(self, decomposition, dual_variables):
         projections = decomposition.projection_matrices
@@ -579,6 +615,31 @@ class Parafac2ADMM(BaseParafac2SubProblem):
                     reg += self.temporal_similarity*(np.linalg.norm(B_k - factor_matrices[k+1])**2)
         return reg
     
+    @property
+    def checkpoint_params(self):
+        if self.aux_fms is not None:
+            aux_fms = {
+                f"aux_fm_{i:04d}": aux_fm for i, aux_fm in enumerate(self.aux_fms)
+            }
+            duals = {
+                f"dual_var_{i:04d}": dual_var for i, dual_var in enumerate(self.dual_variables)
+            }
+            checkpoint_params = {**aux_fms, **duals}
+        else:
+            checkpoint_params = {}
+
+        return checkpoint_params
+
+    def load_from_hdf5_group(self, group):
+        aux_fm_names = [dataset_name for dataset_name in group if dataset_name.startswith("aux_fm_")]
+        aux_fm_names.sort()
+        dual_names = [dataset_name for dataset_name in group if dataset_name.startswith("dual_var_")]
+        dual_names.sort()
+
+        self.aux_fms = [group[aux_fm_name][:] for aux_fm_name in aux_fm_names]
+        self.dual_var = [group[dual_name][:] for dual_name in dual_names]
+
+    
         
 class FlexibleParafac2ADMM(BaseParafac2SubProblem):
     def __init__(self, non_negativity=True):
@@ -603,7 +664,8 @@ class BlockParafac2(BaseDecomposer):
         print_frequency=None,
         projection_update_frequency=5,
         convergence_check_frequency=1,
-        normalize_B=False
+        normalize_B=False,
+        normalize_B_after_update=False
     ):
         if (
             not hasattr(sub_problems[1], '_is_pf2_evolving_mode') or 
@@ -628,6 +690,7 @@ class BlockParafac2(BaseDecomposer):
         self.projection_update_frequency = projection_update_frequency
         self.convergence_check_frequency = convergence_check_frequency
         self.normalize_B = normalize_B
+        self.normalize_B_after_update = normalize_B_after_update
 
     def _check_valid_components(self, decomposition):
         return BaseParafac2._check_valid_components(self, decomposition)
@@ -667,6 +730,12 @@ class BlockParafac2(BaseDecomposer):
         self.sub_problems[1].update_decomposition(
             self.X, self.decomposition, self.projected_X, should_update_projections=should_update_projections
         )
+
+        if self.normalize_B_after_update:
+            norms = np.linalg.norm(self.decomposition.blueprint_B, axis=0, keepdims=True)
+            self.decomposition.blueprint_B[:] = self.decomposition.blueprint_B/norms
+            self.decomposition.C[:] = self.decomposition.C*norms
+
         # print(f'Before {self.current_iteration:6d}B: The MSE is {self.MSE:4g}, f is {self.loss:4g}, '
         #               f'improvement is {self._rel_function_change:g}')
         self.sub_problems[0].update_decomposition(
@@ -693,7 +762,7 @@ class BlockParafac2(BaseDecomposer):
                       f'improvement is {rel_change:g}')
 
         if (
-            ((self.current_iteration+1) % self.checkpoint_frequency != 0) and 
+            ((self.current_iteration) % self.checkpoint_frequency != 0) and 
             (self.checkpoint_frequency > 0)
         ):
             self.store_checkpoint()
@@ -783,3 +852,52 @@ class BlockParafac2(BaseDecomposer):
     @property
     def MSE(self):
         return self.SSE/self.decomposition.num_elements
+    
+    def checkpoint_callback(self):
+        extra_params = {}
+        for sub_problem in self.sub_problems:
+            extra_params = {**extra_params, **sub_problem.checkpoint_params}
+        
+        return extra_params
+    
+    
+    def load_checkpoint(self, checkpoint_path, load_it=None):
+        """Load the specified checkpoint at the given iteration.
+
+        If ``load_it=None``, then the latest checkpoint will be used.
+        """
+        # TODO: classmethod, dump all params. Requires major refactoring.
+        super().load_checkpoint(checkpoint_path, load_it=load_it)
+        with h5py.File(checkpoint_path, "r") as h5:
+            if 'final_iteration' not in h5.attrs:
+                raise ValueError(f'There is no checkpoints in {checkpoint_path}')
+
+            if load_it is None:
+                load_it = h5.attrs['final_iteration']
+            self.current_iteration = load_it
+
+            group_name = f'checkpoint_{load_it:05d}'
+            if group_name not in h5:
+                raise ValueError(f'There is no checkpoint {group_name} in {checkpoint_path}')
+
+            checkpoint_group = h5[f'checkpoint_{load_it:05d}']
+            # TODO: clean this up
+            try:
+                initial_decomposition = self.DecompositionType.load_from_hdf5_group(checkpoint_group)
+                for sub_problem in self.sub_problems:
+                    sub_problem.load_from_hdf5_group(checkpoint_group)
+            except KeyError:
+                warn("Crashed at final iteration, loading previous iteration")
+                groups = [g for g in h5 if "checkpoint_" in g]
+                groups.sort()
+                for group in sorted(groups, reverse=True):
+                    try:
+                        initial_decomposition = self.DecompositionType.load_from_hdf5_group(h5[group])
+                        for sub_problem in self.sub_problems:
+                            sub_problem.load_from_hdf5_group(group)
+                    except KeyError:
+                        pass
+                    else:
+                        break
+                else:
+                    raise ValueError("No valid decomposition")

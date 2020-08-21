@@ -8,6 +8,13 @@ from .. import base, metrics, utils
 __all__ = ['KruskalTensor', 'EvolvingTensor', 'Parafac2Tensor']
 
 
+def safe_h5_store(group, dataset_name, data):
+    if dataset_name in group:
+        group[dataset_name][:] = data
+    else:
+        group[dataset_name] = data
+
+
 class BaseDecomposedTensor(ABC):
     @abstractmethod
     def __init__(self):
@@ -21,13 +28,30 @@ class BaseDecomposedTensor(ABC):
     def __getitem__(self, item):
         raise NotImplementedError
 
-    def store(self, filename):
+    def store(self, filename, extra_params):
+        """Save decomposition to file.
+
+        Arguments
+        ---------
+        filename : str or pathlib.Path
+        extra_params : dict[str, np.ndarray]
+        """
         with h5py.File(filename, 'w') as h5:
             self.store_in_hdf5_group(h5)
     
     @abstractmethod
-    def store_in_hdf5_group(self, group):
-        raise NotImplementedError
+    def store_in_hdf5_group(self, group, extra_params):
+        """Save decomposition to a HDF5 group.
+
+        Arguments
+        ---------
+        group : h5py.Group
+        extra_params : dict[str, np.ndarray]
+        """
+        self._prepare_hdf5_group(group)
+        if extra_params is not None:
+            for name, var in extra_params.items():
+                safe_h5_store(group, name, var)
     
     def _prepare_hdf5_group(self, group):
         group.attrs['type'] = type(self).__name__
@@ -181,16 +205,24 @@ class KruskalTensor(BaseDecomposedTensor):
         
         return cls(factor_matrices).normalize_components(update_weights=False)
 
-    def store_in_hdf5_group(self, group):
-        self._prepare_hdf5_group(group)
+    def store_in_hdf5_group(self, group, extra_params):
+        """Save decomposition to a HDF5 group.
+
+        Arguments
+        ---------
+        group : h5py.Group
+        extra_params : dict[str, np.ndarray]
+        """
+        super().store_in_hdf5_group(group, extra_params)
 
         group.attrs['n_factor_matrices'] = len(self.factor_matrices)
         group.attrs['rank'] = self.rank
 
         for i, factor_matrix in enumerate(self.factor_matrices):
-            group[self.fm_template.format(i)] = factor_matrix
+            dataset_name = self.fm_template.format(i)
+            safe_h5_store(group, dataset_name, factor_matrix)
         
-        group['weights'] = self.weights
+        safe_h5_store(group, 'weights', self.weights)
         
     @classmethod
     def load_from_hdf5_group(cls, group):
@@ -420,18 +452,25 @@ class EvolvingTensor(BaseDecomposedTensor):
             constructed[:, :slice_.shape[1], k] = slice_
         return constructed
 
-    def store_in_hdf5_group(self, group):
-        self._prepare_hdf5_group(group)
+    def store_in_hdf5_group(self, group, extra_params):
+        """Save decomposition to a HDF5 group.
+
+        Arguments
+        ---------
+        group : h5py.Group
+        extra_params : dict[str, np.ndarray]
+        """
+        super().store_in_hdf5_group(group, extra_params)
 
         group.attrs['rank'] = self.rank
         group.attrs['all_same_size'] = self.all_same_size
         group.attrs['warning'] = self.warning
         group.attrs['num_Bs'] = len(self.B)
 
-        group['A'] = self.A
+        safe_h5_store(group, 'A', self.A)
         for k, Bk in enumerate(self.B):
-            group[self.B_template.format(k)] = Bk
-        group['C'] = self.C
+            safe_h5_store(group, self.B_template.format(k), Bk)
+        safe_h5_store(group, 'C', self.C)
         
     @classmethod
     def load_from_hdf5_group(cls, group):
@@ -711,19 +750,26 @@ class Parafac2Tensor(EvolvingTensor):
 
 
 
-    def store_in_hdf5_group(self, group):
-        self._prepare_hdf5_group(group)
+    def store_in_hdf5_group(self, group, extra_params):
+        """Save decomposition to a HDF5 group.
+
+        Arguments
+        ---------
+        group : h5py.Group
+        extra_params : dict[str, np.ndarray]
+        """
+        super().store_in_hdf5_group(group, extra_params)
 
         group.attrs['rank'] = self.rank
         group.attrs['all_same_size'] = self.all_same_size
         group.attrs['warning'] = self.warning
         group.attrs['n_projection_matrices'] = len(self.projection_matrices)
 
-        group['A'] = self.A
-        group['blueprint_B'] = self.blueprint_B
-        group['C'] = self.C
+        safe_h5_store(group, 'A', self.A)
+        safe_h5_store(group, 'blueprint_B', self.blueprint_B)
+        safe_h5_store(group, 'C', self.C)
         for i, pm in enumerate(self.projection_matrices):
-            group[self.pm_template.format(i)] = pm
+            safe_h5_store(group, self.pm_template.format(i), pm)
         
     @classmethod
     def load_from_hdf5_group(cls, group):
