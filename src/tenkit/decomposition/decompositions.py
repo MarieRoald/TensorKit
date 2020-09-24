@@ -28,7 +28,7 @@ class BaseDecomposedTensor(ABC):
     def __getitem__(self, item):
         raise NotImplementedError
 
-    def store(self, filename, extra_params):
+    def store(self, filename, extra_params=None):
         """Save decomposition to file.
 
         Arguments
@@ -37,10 +37,10 @@ class BaseDecomposedTensor(ABC):
         extra_params : dict[str, np.ndarray]
         """
         with h5py.File(filename, 'w') as h5:
-            self.store_in_hdf5_group(h5)
+            self.store_in_hdf5_group(h5, extra_params)
     
     @abstractmethod
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -205,7 +205,7 @@ class KruskalTensor(BaseDecomposedTensor):
         
         return cls(factor_matrices).normalize_components(update_weights=False)
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -452,7 +452,7 @@ class EvolvingTensor(BaseDecomposedTensor):
             constructed[:, :slice_.shape[1], k] = slice_
         return constructed
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -750,7 +750,7 @@ class Parafac2Tensor(EvolvingTensor):
 
 
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
