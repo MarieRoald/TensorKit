@@ -452,7 +452,7 @@ class EvolvingTensor(BaseDecomposedTensor):
             constructed[:, :slice_.shape[1], k] = slice_
         return constructed
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
