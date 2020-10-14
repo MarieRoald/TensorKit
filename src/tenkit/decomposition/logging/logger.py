@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod, abstractproperty
+import time
 
 import h5py
 import numpy as np
@@ -112,17 +113,21 @@ class Parafac2ErrorLogger(BaseLogger):
 
 
 class EvolvingTensorFMSLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_options=None, decomposition=None):
         super().__init__()
         if fms_options is None:
             fms_options = {}
+        self.fms_options = fms_options
+
+        if decomposition is not None:
+            self.true_decomposition = decomposition
+            return
         
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
                 h5 = h5[internal_path]
             self.true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
-        self.fms_options = fms_options
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
@@ -135,10 +140,15 @@ class EvolvingTensorFMSLogger(BaseLogger):
 
 
 class EvolvingTensorFMSALogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_options=None, decomposition=None):
         super().__init__()
         if fms_options is None:
             fms_options = {}
+        self.fms_options = fms_options
+
+        if decomposition is not None:
+            self.true_A = decomposition.A
+            return
         
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
@@ -146,7 +156,6 @@ class EvolvingTensorFMSALogger(BaseLogger):
             true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
         self.true_A = true_decomposition.A
-        self.fms_options = fms_options
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
@@ -159,10 +168,15 @@ class EvolvingTensorFMSALogger(BaseLogger):
 
 
 class EvolvingTensorFMSBLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_options=None, decomposition=None):
         super().__init__()
         if fms_options is None:
             fms_options = {}
+        self.fms_options = fms_options
+
+        if decomposition is not None:
+            self.true_B = np.array(decomposition.B)
+            return
         
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
@@ -170,7 +184,6 @@ class EvolvingTensorFMSBLogger(BaseLogger):
             true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
         self.true_B = np.array(true_decomposition.B)
-        self.fms_options = fms_options
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
@@ -186,10 +199,15 @@ class EvolvingTensorFMSBLogger(BaseLogger):
 
 
 class EvolvingTensorFMSCLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_options=None, decomposition=None):
         super().__init__()
         if fms_options is None:
             fms_options = {}
+        self.fms_options = fms_options
+
+        if decomposition is not None:
+            self.true_C = decomposition.C
+            return
         
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
@@ -197,7 +215,6 @@ class EvolvingTensorFMSCLogger(BaseLogger):
             true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
         self.true_C = true_decomposition.C
-        self.fms_options = fms_options
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
@@ -210,10 +227,17 @@ class EvolvingTensorFMSCLogger(BaseLogger):
 
 
 class EvolvingTensorFMSBCLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_options=None, decomposition=None):
         super().__init__()
         if fms_options is None:
             fms_options = {}
+        self.fms_options = fms_options
+
+        if decomposition is not None:
+            true_B = np.array(decomposition.B)
+            true_C = decomposition.C
+            self.true_BC = true_B*true_C[:, np.newaxis]
+            return
         
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
@@ -300,3 +324,23 @@ class Parafac2ADMMCouplingErrorLogger(BaseLogger):
         self.log_metrics.append(coupling_error)
 
 
+class Timer(BaseLogger):
+    def __init__(self):
+        super().__init__()
+        self.initial_time = None
+
+    def _log(self, decomposer):
+        if self.initial_time is None:
+            self.initial_time = time.process_time()
+            current_time = self.initial_time
+        else:
+            current_time = time.process_time()
+        self.log_metrics.append(current_time - self.initial_time)
+        
+
+class CouplingError(BaseLogger):
+    def _log(self, decomposer):
+        try:
+            self.log_metrics.append(decomposer.coupling_error)
+        except AttributeError:
+            self.log_metrics.append(-1)
