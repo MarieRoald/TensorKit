@@ -243,38 +243,3 @@ class TestBlockParafac2:
         pf2.fit(X)
 
         assert pf2.explained_variance > (1-1e-5)
-
-
-
-class DontADMMParafac2(TestBlockParafac2):
-    def test_parafac2_decomposition(self, random_nonnegative_rank4_ktensor):
-        X = random_nonnegative_rank4_ktensor.construct_tensor()
-        pf2 = BlockParafac2(
-            rank=4,
-            sub_problems=[
-                ADMMSubproblem(mode=0, rho=1),
-                Parafac2RLS(),
-                ADMMSubproblem(mode=2, non_negativity=False, rho=1),
-            ],
-            convergence_tol=1e-8
-        )
-        pf2.fit(X)
-
-        assert pf2.explained_variance > (1-1e-3)
-
-    
-    def test_parafac2_decomposition_non_negative_A_and_C(self, random_nonnegative_rank4_ktensor):
-        X = random_nonnegative_rank4_ktensor.construct_tensor()
-        pf2 = BlockParafac2(
-            rank=4,
-            sub_problems=[
-                ADMMSubproblem(mode=0, non_negativity=True, rho=1),
-                Parafac2RLS(),
-                ADMMSubproblem(mode=2, non_negativity=True, rho=1),
-            ],
-            convergence_tol=1e-8
-        )
-        pf2.fit(X)
-
-        assert pf2.explained_variance > (1-1e-3)
-    pass
