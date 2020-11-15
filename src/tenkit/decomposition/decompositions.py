@@ -453,6 +453,8 @@ class EvolvingTensor(BaseDecomposedTensor):
         return cls(factor_matrices[0], factor_matrices[1], factor_matrices[2])
 
     def _check_all_same_size(self, matrices):
+        """Returns true if all input matrices have the same number of rows and False otherwise.
+        """
         size = matrices[0].shape[0]
         for matrix in matrices:
             if size != matrix.shape[0]:
@@ -516,7 +518,7 @@ class EvolvingTensor(BaseDecomposedTensor):
 
         shape = self.shape
         constructed = np.zeros(shape)
-        for k, _ in enumerate(self.slice_shapes):
+        for k, matrix_size in enumerate(self.slice_shapes):
             slice_ = self.construct_slice(k)
             constructed[:, :slice_.shape[1], k] = slice_
         return constructed
@@ -543,6 +545,10 @@ class EvolvingTensor(BaseDecomposedTensor):
         
     @classmethod
     def load_from_hdf5_group(cls, group):
+        """Load an evolving tensor from a previously saved HDF5 group.
+
+        Used to load from checkpoints.
+        """
         cls._check_hdf5_group(group)
 
         A = group['A'][...]
@@ -554,6 +560,8 @@ class EvolvingTensor(BaseDecomposedTensor):
         return cls(A, B, C, warning=warning)
     
     def __getitem__(self, item):
+        """Returns the factors of the i-th mode.
+        """
         if item == 0:
             return self.A
         elif item == 1:
@@ -566,7 +574,7 @@ class EvolvingTensor(BaseDecomposedTensor):
     def degeneracy(self):
         """Return the degeneracy score of the tensor.
 
-        The degeneracy score is given by the factor match score
+        The degeneracy score is given by the lowest factor match score (no absolute values)
         coefficient between two components.
         """
         degeneracy_scores = np.ones(shape=(self.rank, self.rank))
@@ -576,12 +584,40 @@ class EvolvingTensor(BaseDecomposedTensor):
         return degeneracy_scores
 
     def factor_match_score(self, decomposition, weight_penalty=True, fms_reduction='min'):
+        r"""Compute the factor match score between this and another decomposition.
+
+        The FMS is given by either
+
+        .. math::
+
+            \min_i |a_i^T \hat{a}_i| |b_i^T \hat{b}_i| |c_i^T \hat{c}_i|,
+
+        or
+
+        .. math::
+
+            \frac{1}{rank} |a_i^T \hat{a}_i| |b_i^T \hat{b}_i| |c_i^T \hat{c}_i|,
+
+        where :math:`b_i` the i-th row of a matrix consisting of all the :math:`B_k`
+        factor matrices concatenated ontop of each other.
+
+        Arguments:
+        ----------
+        decomposition : tenkit.decomposition.KruskalTensor
+        weight_penalty : bool
+            Whether to normalise the decompositions before computing the FMS or not
+        fms_reduction: str, either 'min' or 'mean'
+            Which method to combine the Tucker congruence coefficients to compute the FMS
+        """
         return metrics.factor_match_score([self.A, self.B_unfolded, self.C], 
                                           [decomposition.A, decomposition.B_unfolded, decomposition.C], 
                                           weight_penalty=weight_penalty, 
                                           fms_reduction=fms_reduction)
 
     def separate_mode_factor_match_score(self, decomposition, fms_reduction='min'):
+        """Compute the minimum or mean Tucker congruence coefficient between each factor matrix
+        of this and the given decomposition.
+        """
         if not isinstance(decomposition, EvolvingTensor):
             decomposition = decomposition.to_evolving_tensor()
         return metrics.separate_mode_factor_match_score([self.A, self.B_unfolded, self.C],
@@ -590,7 +626,8 @@ class EvolvingTensor(BaseDecomposedTensor):
 
     @classmethod
     def random_init(cls, sizes, rank, non_negativity=None):
-        # TODO: Check if we should use rand or randn
+        """Initialise an evolving tensor decomposition with uniformly random distributed components.
+        """
         if isinstance(sizes[1], int):
             sizes = list(sizes)
             sizes[1] = [sizes[1]]*sizes[2]
