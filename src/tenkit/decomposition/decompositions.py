@@ -28,7 +28,7 @@ class BaseDecomposedTensor(ABC):
     def __getitem__(self, item):
         raise NotImplementedError
 
-    def store(self, filename, extra_params):
+    def store(self, filename, extra_params=None):
         """Save decomposition to file.
 
         Arguments
@@ -40,7 +40,7 @@ class BaseDecomposedTensor(ABC):
             self.store_in_hdf5_group(h5)
     
     @abstractmethod
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -58,6 +58,8 @@ class BaseDecomposedTensor(ABC):
     
     @classmethod
     def from_file(cls, filename):
+        """Load a decomposition from a specified HDF5 file.
+        """
         with h5py.File(filename, "r") as h5:
             return cls.load_from_hdf5_group(h5)
     
@@ -152,16 +154,21 @@ class KruskalTensor(BaseDecomposedTensor):
     
     @property
     def shape(self):
+        """The shape of the reconstructed tensor.
+        """
         return [fm.shape[0] for fm in self.factor_matrices]
     
     def construct_tensor(self):
-
+        """Construct the tensor as a dense numpy array.
+        """
         shape = [f.shape[0] for f in self.factor_matrices]
         tensor = (self.weights[np.newaxis] * self.factor_matrices[0]) @ base.khatri_rao(*self.factor_matrices[1:]).T
 
         return base.fold(tensor, 0, shape=shape)
 
     def reset_weights(self):
+        """Used during fitting of components without considering the factor weights.
+        """
         self.weights *= 0
         self.weights += 1
 
@@ -205,7 +212,7 @@ class KruskalTensor(BaseDecomposedTensor):
         
         return cls(factor_matrices).normalize_components(update_weights=False)
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -226,6 +233,10 @@ class KruskalTensor(BaseDecomposedTensor):
         
     @classmethod
     def load_from_hdf5_group(cls, group):
+        """Load a Kruskal tensor from a previously saved HDF5 group.
+
+        Used to load from checkpoints.
+        """
         cls._check_hdf5_group(group)
 
         factor_matrices = [
@@ -237,12 +248,49 @@ class KruskalTensor(BaseDecomposedTensor):
         return cls(factor_matrices, weights)
     
     def __getitem__(self, item):
+        """Returns the i-th factor matrix.
+        """
         return self.factor_matrices[item]
     
     def __len__(self):
+        """The number of modes of the tensor.
+        """
         return len(self.factor_matrices)
 
     def factor_match_score(self, decomposition, weight_penalty=True, fms_reduction='min'):
+        r"""Compute the factor match score between this and another decomposition.
+
+        The FMS is given by either
+
+        .. math::
+
+            \min_i T_i,
+
+        or
+
+        .. math::
+
+            \frac{1}{rank} \sum_i T_i,
+
+        where :math:`T_i` is given by
+
+        .. math::
+
+            \frac{1}{rank} |a_i^T \hat{a}_i| |b_i^T \hat{b}_i| |c_i^T \hat{c}_i|
+
+        for a third order Kruskal tensor .
+
+        Note that since Kruskal tensors are only unique up to a permutation of the factors,
+        we must compute the optimal permutation for the FMS.
+
+        Arguments:
+        ----------
+        decomposition : tenkit.decomposition.KruskalTensor
+        weight_penalty : bool
+            Whether to normalise the decompositions before computing the FMS or not
+        fms_reduction: str, either 'min' or 'mean'
+            Which method to combine the Tucker congruence coefficients to compute the FMS
+        """
         assert decomposition.rank == self.rank
 
         return metrics.factor_match_score(self.factor_matrices, 
@@ -251,11 +299,18 @@ class KruskalTensor(BaseDecomposedTensor):
                                           fms_reduction=fms_reduction)
     
     def separate_mode_factor_match_score(self, decomposition, fms_reduction='min'):
+        """Compute the minimum or mean Tucker congruence coefficient between each factor matrix
+        of this and the given decomposition.
+        """
         return metrics.separate_mode_factor_match_score(self.factor_matrices,
                                                         decomposition.factor_matrices, 
                                                         fms_reduction=fms_reduction)
  
     def get_sign_scores(self, X):
+        """Find the "coordinates" of `X` in the multilinear subspace spanned by the components.
+
+        If a score is positive, then `X` is in some sense similar to the components.
+        """
         sign_scores = []
         for n, factor_matrix in enumerate(self.factor_matrices):
             sign_scores.append(utils.get_signs(factor_matrix, base.unfold(X, n))[1])
@@ -263,7 +318,8 @@ class KruskalTensor(BaseDecomposedTensor):
         return sign_scores
     
     def get_signs(self, X):
-
+        """Find the signs needed to align the factor matrices in the same "direction" as `X`.
+        """
         sign_scores = self.get_sign_scores(X)
         signs = [np.ones(self.rank, dtype=int) for _ in self.factor_matrices]
         for rank in range(self.rank):
@@ -281,9 +337,12 @@ class KruskalTensor(BaseDecomposedTensor):
                 signs[wrongly_flipped][rank] *= -1
         
         return signs
-            
 
     def get_single_component_decomposition(self, component):
+        """Generate a composition with only one of the components. Used to compute explained variance per component.
+
+        Note however, that the explained variance per component may be misleading for highly correlated components.
+        """
         factor_matrices = self.factor_matrices
         weights = self.weights
 
@@ -299,6 +358,14 @@ class KruskalTensor(BaseDecomposedTensor):
         return single_component_decomposition
 
     def degeneracy(self):
+        """Compute the degeneracy score of this decomposition.
+
+        To compute the degeneracy score, compute the tucker congruence coefficient between
+        each component for each factor matrix. Then multiply these congruence coefficients together.
+        
+        The degeneracy score is then the minimum product of these congruence coefficients, and if it is
+        close to -1, then that means that two of the components cancel out.
+        """
         degeneracy_scores = np.ones(shape=(self.rank, self.rank))
         for factor_matrix in self.factor_matrices:
             degeneracy_scores *= metrics._tucker_congruence(factor_matrix, factor_matrix)
@@ -306,6 +373,8 @@ class KruskalTensor(BaseDecomposedTensor):
         return degeneracy_scores
     
     def core_consistency(self, X, normalized=False):
+        """Compute the core consistency of this decomposition given the dense tensor it approximates.
+        """
         if len(self.factor_matrices) != 3:
             raise ValueError('Core consistency is only implemented for third order tensors')
         return metrics.core_consistency(X, *self.factor_matrices, normalized=normalized)
@@ -750,7 +819,7 @@ class Parafac2Tensor(EvolvingTensor):
 
 
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
