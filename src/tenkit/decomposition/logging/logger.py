@@ -114,6 +114,10 @@ class SSELogger(BaseLogger):
     def _log(self, decomposer):
         self.log_metrics.append(decomposer.SSE)
 
+class RelativeSSELogger(BaseLogger):
+    def _log(self, decomposer):
+        self.log_metrics.append(decomposer.SSE / decomposer.X_norm)
+
 class RMSELogger(BaseLogger):
     def _log(self, decomposer):
         self.log_metrics.append(decomposer.RMSE)
