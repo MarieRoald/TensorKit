@@ -28,7 +28,7 @@ class BaseDecomposedTensor(ABC):
     def __getitem__(self, item):
         raise NotImplementedError
 
-    def store(self, filename, extra_params):
+    def store(self, filename, extra_params=None):
         """Save decomposition to file.
 
         Arguments
@@ -36,11 +36,13 @@ class BaseDecomposedTensor(ABC):
         filename : str or pathlib.Path
         extra_params : dict[str, np.ndarray]
         """
+        if extra_params is None:
+            extra_params = {}
         with h5py.File(filename, 'w') as h5:
             self.store_in_hdf5_group(h5)
     
     @abstractmethod
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -48,6 +50,8 @@ class BaseDecomposedTensor(ABC):
         group : h5py.Group
         extra_params : dict[str, np.ndarray]
         """
+        if extra_params is None:
+            extra_params = {}
         self._prepare_hdf5_group(group)
         if extra_params is not None:
             for name, var in extra_params.items():
@@ -205,7 +209,7 @@ class KruskalTensor(BaseDecomposedTensor):
         
         return cls(factor_matrices).normalize_components(update_weights=False)
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -213,6 +217,8 @@ class KruskalTensor(BaseDecomposedTensor):
         group : h5py.Group
         extra_params : dict[str, np.ndarray]
         """
+        if extra_params is None:
+            extra_params = {}
         super().store_in_hdf5_group(group, extra_params)
 
         group.attrs['n_factor_matrices'] = len(self.factor_matrices)
@@ -452,7 +458,7 @@ class EvolvingTensor(BaseDecomposedTensor):
             constructed[:, :slice_.shape[1], k] = slice_
         return constructed
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -460,6 +466,8 @@ class EvolvingTensor(BaseDecomposedTensor):
         group : h5py.Group
         extra_params : dict[str, np.ndarray]
         """
+        if extra_params is None:
+            extra_params = {}
         super().store_in_hdf5_group(group, extra_params)
 
         group.attrs['rank'] = self.rank
@@ -750,7 +758,7 @@ class Parafac2Tensor(EvolvingTensor):
 
 
 
-    def store_in_hdf5_group(self, group, extra_params):
+    def store_in_hdf5_group(self, group, extra_params=None):
         """Save decomposition to a HDF5 group.
 
         Arguments
@@ -758,6 +766,8 @@ class Parafac2Tensor(EvolvingTensor):
         group : h5py.Group
         extra_params : dict[str, np.ndarray]
         """
+        if extra_params is None:
+            extra_params = {}
         super().store_in_hdf5_group(group, extra_params)
 
         group.attrs['rank'] = self.rank
