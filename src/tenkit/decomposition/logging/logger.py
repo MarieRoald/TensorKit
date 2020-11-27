@@ -14,6 +14,7 @@ class BaseLogger(ABC):
         self.log_metrics = []
         self.log_iterations = []
         self.prev_checkpoint_it = 0
+        self.name = type(self).__name__
 
     @abstractmethod
     def _log(self, decomposer):
@@ -55,18 +56,27 @@ class BaseLogger(ABC):
             logger_group.create_dataset(logname, shape=(len(log),), maxshape=(None,), dtype=log.dtype)
             logger_group[logname][...] = log
 
-
     def write_to_hdf5_group(self, h5group):
         """Writes log metrics and log iterations to HDF5 group."""
-        logger_group = h5group.require_group(type(self).__name__)
+        logger_group = h5group.require_group(self.name)
         self._write_sequence_to_hd5_group('iterations', logger_group, self.latest_log_iterations)
         self._write_sequence_to_hd5_group('values', logger_group, self.latest_log_metrics)
         self.prev_checkpoint_it += len(self.latest_log_iterations)
 
 
+class NumSubIts(BaseLogger):
+    def _log(self, decomposer):
+        try:
+            it_num = decomposer.sub_problems[1].num_its
+        except AttributeError:
+            it_num = -1
+        self.log_metrics.append(it_num)
+
+
 class LossLogger(BaseLogger):
     def _log(self, decomposer):
         self.log_metrics.append(decomposer.loss)
+
 
 class MSELogger(BaseLogger):
     def _log(self, decomposer):
@@ -112,65 +122,59 @@ class Parafac2ErrorLogger(BaseLogger):
 
 
 class EvolvingTensorFMSLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_reduction='min'):
         super().__init__()
-        if fms_options is None:
-            fms_options = {}
-        
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
                 h5 = h5[internal_path]
             self.true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
-        self.fms_options = fms_options
+        self.fms_reduction = fms_reduction
+        self.name = f'{self.name}_{fms_reduction.upper()}'
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
             decomposer.decomposition, allow_same_class=True
         )
         fms = self.true_decomposition.factor_match_score(
-            decomposition, **self.fms_options, weight_penalty=False
+            decomposition, fms_reduction=self.fms_reduction, weight_penalty=False
         )[0]
         self.log_metrics.append(fms)
 
 
 class EvolvingTensorFMSALogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_reduction='min'):
         super().__init__()
-        if fms_options is None:
-            fms_options = {}
-        
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
                 h5 = h5[internal_path]
             true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
         self.true_A = true_decomposition.A
-        self.fms_options = fms_options
+        self.fms_reduction = fms_reduction
+        self.name = f'{self.name}_{fms_reduction.upper()}'
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
             decomposer.decomposition, allow_same_class=True
         )
         fms = factor_match_score(
-            [self.true_A], [decomposition.A], weight_penalty=False, **self.fms_options
+            [self.true_A], [decomposition.A], weight_penalty=False, fms_reduction=self.fms_reduction
         )[0]
         self.log_metrics.append(fms)
 
 
 class EvolvingTensorFMSBLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_reduction='min'):
         super().__init__()
-        if fms_options is None:
-            fms_options = {}
-        
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
                 h5 = h5[internal_path]
             true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
         self.true_B = np.array(true_decomposition.B)
-        self.fms_options = fms_options
+        self.fms_reduction = fms_reduction
+        self.name = f'{self.name}_{fms_reduction.upper()}'
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
@@ -180,41 +184,36 @@ class EvolvingTensorFMSBLogger(BaseLogger):
         rank = B.shape[-1]
 
         fms = factor_match_score(
-            [self.true_B.reshape(-1, rank)], [B.reshape(-1, rank)], weight_penalty=False, **self.fms_options
+            [self.true_B.reshape(-1, rank)], [B.reshape(-1, rank)], weight_penalty=False, fms_reduction=self.fms_reduction
         )[0]
         self.log_metrics.append(fms)
 
 
 class EvolvingTensorFMSCLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_reduction='min'):
         super().__init__()
-        if fms_options is None:
-            fms_options = {}
-        
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
                 h5 = h5[internal_path]
             true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
         self.true_C = true_decomposition.C
-        self.fms_options = fms_options
+        self.fms_reduction = fms_reduction
+        self.name = f'{self.name}_{fms_reduction.upper()}'
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
             decomposer.decomposition, allow_same_class=True
         )
         fms = factor_match_score(
-            [self.true_C], [decomposition.C], weight_penalty=False, **self.fms_options
+            [self.true_C], [decomposition.C], weight_penalty=False, fms_reduction=self.fms_reduction
         )[0]
         self.log_metrics.append(fms)
 
 
 class EvolvingTensorFMSBCLogger(BaseLogger):
-    def __init__(self, path, internal_path=None, fms_options=None):
+    def __init__(self, path, internal_path=None, fms_reduction='min'):
         super().__init__()
-        if fms_options is None:
-            fms_options = {}
-        
         with h5py.File(path, "r") as h5:
             if internal_path is not None and internal_path != "":
                 h5 = h5[internal_path]
@@ -223,7 +222,8 @@ class EvolvingTensorFMSBCLogger(BaseLogger):
         true_B = np.array(true_decomposition.B)
         true_C = true_decomposition.C
         self.true_BC = true_B*true_C[:, np.newaxis]
-        self.fms_options = fms_options
+        self.fms_reduction = fms_reduction
+        self.name = f'{self.name}_{fms_reduction.upper()}'
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
@@ -234,7 +234,7 @@ class EvolvingTensorFMSBCLogger(BaseLogger):
         rank = BC.shape[-1]
 
         fms = factor_match_score(
-            [self.true_BC.reshape(-1, rank)], [BC.reshape(-1, rank)], weight_penalty=False, **self.fms_options
+            [self.true_BC.reshape(-1, rank)], [BC.reshape(-1, rank)], weight_penalty=False, fms_reduction=self.fms_reduction
         )[0]
         self.log_metrics.append(fms)
 
@@ -300,3 +300,38 @@ class Parafac2ADMMCouplingErrorLogger(BaseLogger):
         self.log_metrics.append(coupling_error)
 
 
+class Timer(BaseLogger):
+    def __init__(self):
+        super().__init__()
+        self.initial_time = None
+
+    def _log(self, decomposer):
+        if self.initial_time is None:
+            self.initial_time = time.process_time()
+            current_time = self.initial_time
+        else:
+            current_time = time.process_time()
+        self.log_metrics.append(current_time - self.initial_time)
+        
+
+class CouplingError(BaseLogger):
+    def _log(self, decomposer):
+        try:
+            self.log_metrics.append(decomposer.coupling_error)
+        except AttributeError:
+            self.log_metrics.append(-1)
+
+
+class SingleCouplingError(BaseLogger):
+    def __init__(self, error_num):
+        super().__init__()
+        self.error_num = error_num
+        self.name = f"SingleCouplingError_{self.error_num}"
+
+    def _log(self, decomposer):
+        try:
+            self.log_metrics.append(decomposer.coupling_errors[self.error_num])
+        except AttributeError:
+            self.log_metrics.append(-1)
+        except IndexError:
+            self.log_metrics.append(-2)
