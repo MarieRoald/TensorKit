@@ -121,7 +121,7 @@ class TestParafac2ALS:
             
             with h5py.File(checkpoint_path, "r") as h5:
                 for i in range(max_its):
-                    if (i+1) % checkpoint_frequency == 0:
+                    if i % checkpoint_frequency == 0 and i > 0:
                         assert f'checkpoint_{i:05d}' in h5
 
 

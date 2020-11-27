@@ -376,6 +376,8 @@ class Parafac2_ALS(BaseParafac2):
         self.cp_updates_per_it = cp_updates_per_it
         self.ridge_penalties = ridge_penalties
         self.orthonormality_constraints = orthonormality_constraints
+        if self.ridge_penalties is not None:
+            raise RuntimeError("Ridge penalties are broken now...")
 
     def init_random(self):
         """Random initialisation of the factor matrices

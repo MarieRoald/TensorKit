@@ -108,7 +108,7 @@ class TestCPALS:
             
             with h5py.File(checkpoint_path, "r") as h5:
                 for i in range(max_its):
-                    if (i+1) % checkpoint_frequency == 0:
+                    if i % checkpoint_frequency == 0 and i > 0:
                         assert f'checkpoint_{i:05d}' in h5
 
 
@@ -225,10 +225,10 @@ class TestCPOPT:
         assert check_grad(loss, derivative, flattened_true) < 1e-5
     
     def test_smooth_gradient_finite_difference(self, smooth_rank4_ktensor, laplacian):
-        factor_constraints = [{}, {'tikhonov_matrix': laplacian}, {}]
+        factor_penalties = [{}, {'tikhonov_matrix': laplacian}, {}]
 
         X = smooth_rank4_ktensor.construct_tensor()
-        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_constraints=factor_constraints)
+        cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_penalties=factor_penalties)
         cp_opt._init_fit(
             X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
         )
@@ -241,14 +241,14 @@ class TestCPOPT:
         assert check_grad(loss, derivative, flattened_true) < 1e-5
     
     def test_smooth_loss_different_than_unregularised(self, smooth_rank4_ktensor, laplacian):
-        factor_constraints = [{}, {'tikhonov_matrix': laplacian}, {}]
+        factor_penalties = [{}, {'tikhonov_matrix': laplacian}, {}]
 
         X = smooth_rank4_ktensor.construct_tensor()
         cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
         cp_opt._init_fit(
             X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
         )
-        cp_smooth_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_constraints=factor_constraints)
+        cp_smooth_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_penalties=factor_penalties)
         cp_smooth_opt._init_fit(
             X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
         )
@@ -256,14 +256,14 @@ class TestCPOPT:
         assert cp_opt._compute_loss(smooth_rank4_ktensor) != cp_smooth_opt._compute_loss(smooth_rank4_ktensor)
 
     def test_smooth_gradient_different_than_unregularised(self, smooth_rank4_ktensor, laplacian):
-        factor_constraints = [{}, {'tikhonov_matrix': laplacian}, {}]
+        factor_penalties = [{}, {'tikhonov_matrix': laplacian}, {}]
 
         X = smooth_rank4_ktensor.construct_tensor()
         cp_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol)
         cp_opt._init_fit(
             X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
         )
-        cp_smooth_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_constraints=factor_constraints)
+        cp_smooth_opt = self.CP(4, max_its=10000, convergence_tol=self.convergence_tol, factor_penalties=factor_penalties)
         cp_smooth_opt._init_fit(
             X=X, max_its=cp_opt.max_its, initial_decomposition=None, importance_weights=None
         )

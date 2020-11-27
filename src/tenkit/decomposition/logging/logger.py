@@ -65,6 +65,43 @@ class BaseLogger(ABC):
         self.prev_checkpoint_it += len(self.latest_log_iterations)
 
 
+class MatrixLogger(BaseLogger):
+    def _write_sequence_to_hd5_group(self, logname, logger_group, log):
+        """Writes list of log values to HDF5 group.
+        
+        Arguments
+        ---------
+        logname: string
+            Name of log. Used as name for a HDF5 dataset.
+        logger_group: h5.Group
+            Group to write the log to.
+        log: list(int)
+            List containing the log values.
+        """
+        log = np.array(log)
+        if len(log) == 0:
+            return
+        if logname in logger_group:
+            old_length = logger_group[logname].shape[0]
+            new_length = old_length + len(log)
+            logger_dataset = logger_group[logname]
+            
+            oldshape = logger_dataset.shape
+            shape = (new_length,)
+            if hasattr(log[0], '__len__'):
+                shape = (new_length, len(log[0]))
+            logger_dataset.resize(shape)
+            logger_dataset[old_length:] = log
+        else:
+            shape = (len(log),)
+            maxshape = (None,)
+            if hasattr(log[0], '__len__'):
+                shape = (len(log), len(log[0]))
+                maxshape = (None, None)
+            logger_group.create_dataset(logname, shape=shape, maxshape=maxshape, dtype=log.dtype)
+            logger_group[logname][...] = log
+
+
 class LossLogger(BaseLogger):
     def _log(self, decomposer):
         self.log_metrics.append(decomposer.loss)
@@ -76,6 +113,10 @@ class MSELogger(BaseLogger):
 class SSELogger(BaseLogger):
     def _log(self, decomposer):
         self.log_metrics.append(decomposer.SSE)
+
+class RelativeSSELogger(BaseLogger):
+    def _log(self, decomposer):
+        self.log_metrics.append(decomposer.SSE / decomposer.X_norm)
 
 class RMSELogger(BaseLogger):
     def _log(self, decomposer):
@@ -338,9 +379,58 @@ class Timer(BaseLogger):
         self.log_metrics.append(current_time - self.initial_time)
         
 
-class CouplingError(BaseLogger):
+class CouplingErrorLogger(BaseLogger):
     def _log(self, decomposer):
         try:
             self.log_metrics.append(decomposer.coupling_error)
+        except AttributeError:
+            self.log_metrics.append(-1)
+
+
+class Parafac2RhoALogger(BaseLogger):
+    def _log(self, decomposer):
+        try:
+            self.log_metrics.append(decomposer.sub_problems[0].rho)
+        except:
+            self.log_metrics.append(-1)
+
+
+class Parafac2RhoCLogger(MatrixLogger):
+    def _log(self, decomposer):
+        try:
+            self.log_metrics.append(decomposer.sub_problems[2].rho)
+        except:
+            self.log_metrics.append([-1])
+
+
+class Parafac2RhoBLogger(MatrixLogger):
+    def _log(self, decomposer):
+        try:
+            self.log_metrics.append(decomposer.sub_problems[1]._cache['rho'])
+        except:
+            self.log_metrics.append([-1])
+
+
+class NumSubIterationsLogger(BaseLogger):
+    def __init__(self, mode):
+        self.mode = mode
+        super().__init__()
+
+    def _log(self, decomposer):
+        try:
+            num_sub_iterations = decomposer.sub_problems[self.mode].num_its
+        except AttributeError:
+            num_sub_iterations = -1
+        self.log_metrics.append(num_sub_iterations)
+
+class SingleCouplingErrorLogger(BaseLogger):
+    def __init__(self, error_num):
+        super().__init__()
+        self.error_num = error_num
+        self.name = f"SingleCouplingError_{self.error_num}"
+
+    def _log(self, decomposer):
+        try:
+            self.log_metrics.append(decomposer.coupling_errors[self.error_num])
         except AttributeError:
             self.log_metrics.append(-1)
