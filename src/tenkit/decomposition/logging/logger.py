@@ -417,6 +417,7 @@ class NumSubIterationsLogger(BaseLogger):
             num_sub_iterations = -1
         self.log_metrics.append(num_sub_iterations)
 
+
 class SingleCouplingErrorLogger(BaseLogger):
     def __init__(self, error_num):
         super().__init__()
@@ -428,3 +429,21 @@ class SingleCouplingErrorLogger(BaseLogger):
             self.log_metrics.append(decomposer.coupling_errors[self.error_num])
         except AttributeError:
             self.log_metrics.append(-1)
+
+
+class SingleModeRegularisationLogger(BaseLogger):
+    def __init__(self, problem_num):
+        super().__init__()
+        self.problem_num = problem_num
+        self.name = f"{self.name}_{self.problem_num}"
+    
+    def _log(self, decomposer):
+        try:
+            dec = decomposer.decomposition
+            subproblem = decomposer.sub_problems[self.problem_num]
+            reg = subproblem.regulariser(dec)
+        except AttributeError:
+            reg = -1
+        except IndexError:
+            reg = -2
+        self.log_metrics.append(reg)
