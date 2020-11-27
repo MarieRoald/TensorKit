@@ -429,6 +429,8 @@ class SingleCouplingErrorLogger(BaseLogger):
             self.log_metrics.append(decomposer.coupling_errors[self.error_num])
         except AttributeError:
             self.log_metrics.append(-1)
+        except IndexError:
+            self.log_metrics.append(-2)
 
 
 class SingleModeRegularisationLogger(BaseLogger):
