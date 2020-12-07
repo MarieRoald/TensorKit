@@ -5,7 +5,7 @@ import numpy as np
 
 from .. import base, metrics, utils
 
-__all__ = ['KruskalTensor', 'EvolvingTensor', 'Parafac2Tensor']
+__all__ = ['KruskalTensor', 'CoupledMatrices', 'EvolvingTensor', 'Parafac2Tensor']
 
 
 def safe_h5_store(group, dataset_name, data):

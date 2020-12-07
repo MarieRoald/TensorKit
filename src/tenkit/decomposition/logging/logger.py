@@ -117,7 +117,7 @@ class SSELogger(BaseLogger):
 
 class RelativeSSELogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_metrics.append(decomposer.SSE / decomposer.X_norm)
+        self.log_metrics.append(decomposer.SSE / (decomposer.X_norm**2))
 
 class RMSELogger(BaseLogger):
     def _log(self, decomposer):
@@ -178,6 +178,9 @@ class EvolvingTensorFMSLogger(BaseLogger):
             decomposition, fms_reduction=self.fms_reduction, weight_penalty=False
         )[0]
         self.log_metrics.append(fms)
+
+
+CoupledMatricesFMSLogger = EvolvingTensorFMSLogger
 
 
 class EvolvingTensorFMSALogger(BaseLogger):
