@@ -832,13 +832,17 @@ class Parafac2Tensor(CoupledMatrices):
             all_same_size = False
 
         if non_negativity == None:
-            non_negativity = [False, False, False]
+            non_negativity = [False, False, True]
             
-
-        
-        A = np.random.rand(sizes[0], rank)
+        if non_negativity[0]:
+            A = np.random.rand(sizes[0], rank)
+        else:
+            A = np.random.randn(sizes[0], rank)
         blueprint_B = np.identity(rank)
-        C = np.random.rand(sizes[2], rank) + 0.1
+        if non_negativity[2]:
+            C = np.random.rand(sizes[2], rank) + 0.1
+        else:
+            C = np.random.randn(sizes[2], rank) + 0.1
 
         projection_matrices = []
 
