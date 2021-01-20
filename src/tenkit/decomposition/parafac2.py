@@ -352,6 +352,7 @@ class Parafac2_ALS(BaseParafac2):
         non_negativity_constraints=None,
         ridge_penalties=None,
         orthonormality_constraints=None,
+        store_first_checkpoint=False
     ):
         super().__init__(
             rank,
@@ -372,7 +373,7 @@ class Parafac2_ALS(BaseParafac2):
                 " be imposed on the blueprint matrix, not the evolving components.",
                 RuntimeWarning
             )
-
+        self.store_first_checkpoint = store_first_checkpoint
         self.cp_updates_per_it = cp_updates_per_it
         self.ridge_penalties = ridge_penalties
         self.orthonormality_constraints = orthonormality_constraints
@@ -405,7 +406,11 @@ class Parafac2_ALS(BaseParafac2):
 
     def _fit(self):
         self._prepare_cp_decomposer()
+        if self.current_iteration == 0 and self.store_first_checkpoint:
+            for logger in self.loggers:
+                logger.log(self)
         for it in range(self.max_its - self.current_iteration):
+            
             if abs(self._rel_function_change) < self.convergence_tol:
                 break
 
