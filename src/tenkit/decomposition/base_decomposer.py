@@ -246,10 +246,10 @@ class BaseDecomposer(ABC):
         self.decomposition = initial_decomposition
     
     def _after_fit_iteration(self):
+        self.current_iteration += 1
+
         for logger in self.loggers:
             logger.log(self)
-
-        self.current_iteration += 1
 
         it = self.current_iteration
         if (it % self.checkpoint_frequency == 0) and (self.checkpoint_frequency > 0):
