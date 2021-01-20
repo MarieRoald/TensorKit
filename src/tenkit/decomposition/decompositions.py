@@ -5,7 +5,7 @@ import numpy as np
 
 from .. import base, metrics, utils
 
-__all__ = ['KruskalTensor', 'EvolvingTensor', 'Parafac2Tensor']
+__all__ = ['KruskalTensor', 'CoupledMatrices', 'EvolvingTensor', 'Parafac2Tensor']
 
 
 def safe_h5_store(group, dataset_name, data):
@@ -386,19 +386,19 @@ class KruskalTensor(BaseDecomposedTensor):
         return metrics.core_consistency(X, *self.factor_matrices, normalized=normalized)
         
 
-class EvolvingTensor(BaseDecomposedTensor):
-    r"""Container class for evolving tensors whose second mode evolve over the third.
+class CoupledMatrices(BaseDecomposedTensor):
+    r"""Container class for coupled matrices.
 
-    EvolvingTensors are decompositions of a third-order tensor
-    :math:`\mathcal{X}` on the following form:
+    Coupled matrix decompositions are decompositions of a set of matrices
+    :math:`X_k` on the following form:
 
     .. math::
 
-        X_k = A \text{diag}(\mathbf{c}_{k :}) B_k^T,
+        X_k = A \text{diag}(\mathbf{c}_{k :}) B_k^T.
     
-    where :math:`X_k` is the kth frontal slice of the tensor, (the matrix
-    equivalent to ``X[:, :, k]``), :math:`A` is a factor matrix and :math:`B_k`
-    are the factor matrices of the evolving mode. 
+    If we have tensors, then :math:`X_k` is the kth frontal slice of the tensor,
+    (the matrix equivalent to ``X[:, :, k]``), :math:`A` is a factor matrix 
+    and :math:`B_k` are the factor matrices of the evolving mode. 
     :math:`\text{diag}(\mathbf{c}_{k :})` is a diagonal matrix formed from the
     kth row of the factor matrix :math:`C`.
 
@@ -566,6 +566,13 @@ class EvolvingTensor(BaseDecomposedTensor):
         all_same_size = group.attrs['all_same_size']
 
         return cls(A, B, C, warning=warning)
+
+    @classmethod
+    def _check_hdf5_group(cls, group):
+        if group.attrs['type'] not in {cls.__name__, "EvolvingTensor"}:
+            raise Warning(f'The `type` attribute of the HDF5 group is not'
+                          f' "{cls.__name__}, but "{group.attrs["type"]}"\n.'
+                          'This might mean that you\'re loading the wrong tensor file')
     
     def __getitem__(self, item):
         """Returns the factors of the i-th mode.
@@ -633,23 +640,21 @@ class EvolvingTensor(BaseDecomposedTensor):
                                                        fms_reduction=fms_reduction)
 
     @classmethod
-    def random_init(cls, sizes, rank, non_negativity=None):
+    def random_init(cls, sizes, rank,):
         """Initialise an evolving tensor decomposition with uniformly random distributed components.
         """
         if isinstance(sizes[1], int):
             sizes = list(sizes)
             sizes[1] = [sizes[1]]*sizes[2]
-        else:
-            all_same_size = False
-
-        if non_negativity == None:
-            non_negativity = [False, False, False]
             
         A = np.random.rand(sizes[0], rank)
         B = [np.random.rand(size, rank) for size in sizes[1]]
         C = np.random.rand(sizes[2], rank) + 0.1
 
         return cls(A, B, C)
+
+
+EvolvingTensor = CoupledMatrices
 
         
 class ProjectedFactor:
@@ -689,7 +694,7 @@ class ProjectedFactor:
         return list(self)
 
 
-class Parafac2Tensor(EvolvingTensor):
+class Parafac2Tensor(CoupledMatrices):
     r"""Container class for PARAFAC2 tensors whose second mode evolve over the third.
 
     PARAFAC2 tensors are decompositions of a third-order tensor

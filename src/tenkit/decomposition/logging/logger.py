@@ -47,6 +47,7 @@ class BaseLogger(ABC):
         log: list(int)
             List containing the log values.
         """
+        log = [(l if l is not None else np.nan) for l in log]
         log = np.array(log)
         if logname in logger_group:
             old_length = logger_group[logname].shape[0]
@@ -117,7 +118,7 @@ class SSELogger(BaseLogger):
 
 class RelativeSSELogger(BaseLogger):
     def _log(self, decomposer):
-        self.log_metrics.append(decomposer.SSE / decomposer.X_norm)
+        self.log_metrics.append(decomposer.SSE / (decomposer.X_norm**2))
 
 class RMSELogger(BaseLogger):
     def _log(self, decomposer):
@@ -178,6 +179,9 @@ class EvolvingTensorFMSLogger(BaseLogger):
             decomposition, fms_reduction=self.fms_reduction, weight_penalty=False
         )[0]
         self.log_metrics.append(fms)
+
+
+CoupledMatricesFMSLogger = EvolvingTensorFMSLogger
 
 
 class EvolvingTensorFMSALogger(BaseLogger):
