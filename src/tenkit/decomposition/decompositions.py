@@ -55,7 +55,10 @@ class BaseDecomposedTensor(ABC):
         self._prepare_hdf5_group(group)
         if extra_params is not None:
             for name, var in extra_params.items():
-                safe_h5_store(group, name, var)
+                try:
+                    safe_h5_store(group, name, var)
+                except TypeError:
+                    print(f"Could not store {name}")
     
     def _prepare_hdf5_group(self, group):
         group.attrs['type'] = type(self).__name__
