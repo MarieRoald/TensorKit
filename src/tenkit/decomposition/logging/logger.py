@@ -217,7 +217,7 @@ class EvolvingTensorFMSBLogger(BaseLogger):
         self.name = f'{self.name}_{fms_reduction.upper()}'
 
         if decomposition is not None:
-            self.true_B = np.array(decomposition.B)
+            self.true_B = np.concatenate(decomposition.B, axis=0)
             return
         
         with h5py.File(path, "r") as h5:
@@ -225,13 +225,13 @@ class EvolvingTensorFMSBLogger(BaseLogger):
                 h5 = h5[internal_path]
             true_decomposition = EvolvingTensor.load_from_hdf5_group(h5)
         
-        self.true_B = np.array(true_decomposition.B)
+        self.true_B = np.concatenate(true_decomposition.B, axis=0)
     
     def _log(self, decomposer):
         decomposition = EvolvingTensor.from_kruskaltensor(
             decomposer.decomposition, allow_same_class=True
         )
-        B = np.array(decomposition.B)
+        B = np.concatenate(decomposition.B, axis=0)
         rank = B.shape[-1]
 
         fms = factor_match_score(
