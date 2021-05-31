@@ -415,6 +415,14 @@ class Parafac2_ALS(BaseParafac2):
                 break
 
             self._update_parafac2_factors()
+            #normA = np.linalg.norm(self.decomposition.A, axis=0, keepdims=True)
+            #normB = np.linalg.norm(self.decomposition.blueprint_B, axis=0, keepdims=True)
+            #normC = np.linalg.norm(self.decomposition.C, axis=0, keepdims=True)
+            #w = (normA * normB * normC) ** (1/3)
+            #self.decomposition.A[:] *= w / normA
+            #self.decomposition.blueprint_B[:] *= w / normB
+            #self.decomposition.C[:] *= w / normC
+
             self._update_convergence()
 
             if self.current_iteration % self.print_frequency == 0 and self.print_frequency > 0:
